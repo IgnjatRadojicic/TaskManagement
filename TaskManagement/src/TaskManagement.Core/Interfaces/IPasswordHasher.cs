@@ -9,6 +9,6 @@ namespace TaskManagement.Core.Interfaces
     public interface IPasswordHasher
     {
         string HashPassword(string password);
-        bool verifyPassword(string password, string hashedPassword);
+        bool VerifyPassword(string password, string hashedPassword);
     }
 }

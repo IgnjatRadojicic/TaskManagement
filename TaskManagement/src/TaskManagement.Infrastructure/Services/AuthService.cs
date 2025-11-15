@@ -53,7 +53,7 @@ namespace TaskManagement.Infrastructure.Services
                 throw new UnauthorizedAccessException("Invalid email or password");
             }
 
-            if(!_passwordHasher.verifyPassword(loginDto.Password, user.PasswordHash))
+            if(!_passwordHasher.VerifyPassword(loginDto.Password, user.PasswordHash))
             {
                 _logger.LogWarning("Failed login attempt for user: {Email}", loginDto.Email);
                 throw new UnauthorizedAccessException("Invalid email or password");
@@ -191,7 +191,42 @@ namespace TaskManagement.Infrastructure.Services
         {
             var tokenHash = HashToken(resetPasswordDto.Token);
 
-            var resetToken = await _con
+            var resetToken = await _context.PasswordResetTokens
+                .Include(t => t.User)
+                .FirstOrDefaultAsync(t => t.Token == tokenHash && t.User.Email == resetPasswordDto.Email);
+
+            if (resetToken == null)
+            {
+                _logger.LogWarning("Invalid password reset token used for email: {Email}", resetPasswordDto.Email);
+                throw new InvalidOperationException("Invalid or expired reset token");
+            }
+
+            if (!resetToken.IsValid)
+            {
+                _logger.LogWarning("Expired or used reset token for email: {Email}", resetPasswordDto.Email);
+                throw new InvalidOperationException("Invalid or expired reset token");
+            }
+
+            var user = resetToken.User;
+            user.PasswordHash = _passwordHasher.HashPassword(resetPasswordDto.NewPassword);
+
+            resetToken.UsedAt = DateTime.UtcNow;
+
+            var refreshTokens = await _context.RefreshTokens
+                .Where(rt => rt.UserId == user.Id && rt.IsActive)
+                .ToListAsync();
+
+            foreach(var rt in refreshTokens)
+            {
+                rt.RevokedAt = DateTime.UtcNow;
+                rt.RevokedByIp = "PasswordReset";
+            }
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Password reset successfully for user: {Email}", user.Email);
+
+            return true;
         }
 
         public async Task RevokeTokenAsync(string refreshToken, string ipAddress)
@@ -219,9 +254,32 @@ namespace TaskManagement.Infrastructure.Services
         }
 
 
-        private async Task<AuthResponseDto> GenerateAuthResponse(User user, object ipAddress)
+        private async Task<AuthResponseDto> GenerateAuthResponse(User user, string ipAddress)
         {
             var accessToken = _tokenGenerator.GenerateAccessToken(user);
+            var refreshToken = _tokenGenerator.GenerateRefreshToken();
+            var refreshTokenHash = HashToken(refreshToken);
+
+            var refreshTokenEntity = new RefreshToken
+            {
+                UserId = user.Id,
+                Token = refreshTokenHash,
+                ExpiresAt = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpiryInDays),
+                CreatedByIp = ipAddress
+            };
+
+            _context.RefreshTokens.Add(refreshTokenEntity);
+            await _context.SaveChangesAsync();
+
+            return new AuthResponseDto
+            {
+                AccessToken = accessToken,
+                RefreshToken = refreshToken,
+                UserName = user.UserName,
+                Email = user.Email,
+                AccessTokenExpiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpiryInMinutes),
+                RefreshTokenExpiresAt = refreshTokenEntity.ExpiresAt
+            };
         }
         private static string GenerateSecureToken()
         {
