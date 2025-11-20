@@ -8,7 +8,7 @@ using TaskManagement.Core.Interfaces;
 
 namespace TaskManagement.Infrastructure.Services
 {
-    public class GroupCodeGenerator : IGroupCodeGenerator  
+    public class GroupCodeGenerator : IGroupCodeGenerator
     {
         private const string ValidChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
         private const int CodeLength = 8;
@@ -25,7 +25,7 @@ namespace TaskManagement.Infrastructure.Services
             return code.ToString();
         }
 
-        public bool IsValid(string code)  
+        public bool IsValid(string code)
         {
             if (string.IsNullOrWhiteSpace(code) || code.Length != CodeLength)
                 return false;

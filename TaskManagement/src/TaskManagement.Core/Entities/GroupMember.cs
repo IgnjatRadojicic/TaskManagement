@@ -17,6 +17,6 @@ namespace TaskManagement.Core.Entities
         public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
 
         public virtual Group Group { get; set; } = null!;
-        public virtual User User { get; set; } = null!;
+        public virtual User User { get; set; } = null!; 
     }
 }

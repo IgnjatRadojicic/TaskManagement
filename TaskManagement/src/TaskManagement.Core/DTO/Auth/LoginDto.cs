@@ -8,6 +8,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace TaskManagement.Core.DTO.Auth
 {
+
+    // Maybe remove password from DTO for extra code security
     public class LoginDto
     {
         [Required(ErrorMessage = "Email is required")]
