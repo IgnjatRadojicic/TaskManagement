@@ -10,16 +10,13 @@ namespace TaskManagement.Core.Entities
     public class PasswordResetToken : BaseEntity
     {
         public Guid UserId { get; set; }
-        public string Token { get; set; } = string.Empty; 
+        public string TokenHash { get; set; } = string.Empty; 
         public DateTime ExpiresAt { get; set; }
+        public bool IsUSed { get; set; } = false;
         public DateTime? UsedAt { get; set; }
-
+        public string IpAddress { get; set; } = string.Empty;
         
         public virtual User User { get; set; } = null!;
 
-       
-        public bool IsExpired => DateTime.UtcNow >= ExpiresAt;
-        public bool IsUsed => UsedAt != null;
-        public bool IsValid => !IsExpired && !IsUsed;
     }
 }

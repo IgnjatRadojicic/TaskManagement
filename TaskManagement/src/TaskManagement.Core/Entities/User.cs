@@ -7,19 +7,26 @@ using TaskManagement.Core.Common;
 
 namespace TaskManagement.Core.Entities
 {
-    public class User : BaseEntity
+    public class User : SelfManagedEntity
     {
         public string UserName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string PasswordHash { get; set; } = string.Empty;
-        public bool IsActive { get; set; } = true;
+
+        public string? FirstName { get; set; }
+        public string? LastName { get; set; }
+        public string? ProfilePictureUrl { get; set; }
+
+        public bool IsEmailConfirmed { get; set; } = false;
+        public DateTime? LastLoginAt { get; set; }
 
 
-        public virtual ICollection<GroupMember> GroupMemberships { get; set; } = new List<GroupMember>();
-        public virtual ICollection<TaskItem> AssignedTasks { get; set; } = new List<TaskItem>();
-        public virtual ICollection<Group> OwnedGroups { get; set; } = new List<Group>();
-        public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
-        public virtual ICollection<PasswordResetToken> PasswordResetTokens { get; set; } = new List<PasswordResetToken>();
+
+        public ICollection<GroupMember> GroupMemberships { get; set; } = new List<GroupMember>();
+        public ICollection<Group> OwnedGroups { get; set; } = new List<Group>();
+        public ICollection<TaskItem> CreatedTasks { get; set; } = new List<TaskItem>();
+        public ICollection<TaskItem> AssignedTasks { get; set; } = new List<TaskItem>();
+        public ICollection<TaskAttachment> UploadedAttachments { get; set; } = new List<TaskAttachment>();
 
     }
 }

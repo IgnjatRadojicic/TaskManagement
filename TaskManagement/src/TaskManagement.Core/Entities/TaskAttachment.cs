@@ -16,6 +16,7 @@ namespace TaskManagement.Core.Entities
         public string ContentType { get; set; } = string.Empty;
 
         public virtual TaskItem Task { get; set; } = null!;
+        public User Uploader { get; set; } = null!;
 
     }
 }
