@@ -17,7 +17,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<User> Users { get; set; }
     public DbSet<Group> Groups { get; set; }
     public DbSet<GroupMember> GroupMembers { get; set; }
-    public DbSet<Task> Tasks { get; set; }
+    public DbSet<TaskItem> Tasks { get; set; }
     public DbSet<TaskAttachment> TaskAttachments { get; set; }
 
     public DbSet<TaskStatusLookup> TaskStatuses { get; set; }

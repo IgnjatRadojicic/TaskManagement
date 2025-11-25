@@ -4,25 +4,34 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using TaskManagement.Core.DTO.Audit;
+using TaskManagement.Core.Entities;
 
 namespace TaskManagement.Core.Interfaces
 {
     public interface IAuditService
-        {
-            Task LogAsync(
-                string entityType,
-                Guid entityId,
-                string action,
-                Guid userId,
-                string? propertyName = null,
-                string? oldValue = null,
-                string? newValue = null,
-                string? reason = null);
+    {
+        Task LogAsync
+        (
+        string entityType,
+        Guid entityId,
+        string action,
+        Guid userId,
+        Guid? groupId = null,
+        string? ipAddress = null,
+        string? userAgent = null,
+        string? propertyName = null,
+        string? oldValue = null,
+        string? newValue = null,
+        string? reason = null);
 
 
-            Task<List<AuditLogDto>> GetEntityHistoryAsync(string entityType, Guid entityId);
+        Task<List<AuditLogDto>> GetEntityHistoryAsync(string entityType, Guid entityId, Guid reqiestingUserId);
 
+        Task<List<AuditLogDto>> GetUserHistoryAsync(Guid userId, Guid requestingUserId, int pageNumber = 1, int pagesize = 50);
+        Task<List<AuditLogDto>> GetGroupHistoryAsync(Guid groupId, Guid requestingUserId, int pageNumber = 1, int pageSize = 50);
 
-            Task<List<AuditLogDto>> GetUserHistoryAsync(Guid userId, int pageNumber = 1, int pageSize = 50);
-        }
+        Task<List<AuditLogDto>> GetTaskHistoryAsync(Guid taskId, Guid requestingId);
+
+        
+    }
 }

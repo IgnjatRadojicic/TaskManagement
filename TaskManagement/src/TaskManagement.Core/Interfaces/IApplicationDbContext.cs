@@ -18,7 +18,7 @@ namespace TaskManagement.Core.Interfaces
         DbSet<User> Users { get; set; }
         DbSet<Group> Groups { get; set; }
         DbSet<GroupMember> GroupMembers { get; set; }
-        DbSet<Task> Tasks { get; set; }
+        DbSet<TaskItem> Tasks { get; set; }
         DbSet<TaskAttachment> TaskAttachments { get; set; }
 
 

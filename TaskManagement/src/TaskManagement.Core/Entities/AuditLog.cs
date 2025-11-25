@@ -13,14 +13,17 @@ namespace TaskManagement.Core.Entities
         public Guid EntityId { get; set; }
         public string Action { get; set; } = string.Empty;
         public string? PropertyName { get; set; }
-        public string? NewValue { get; set; }
         public string? OldValue { get; set; }
+        public string? NewValue { get; set; }
         public Guid UserId { get; set; }
+        public Guid? GroupId { get; set; } 
         public string? Reason { get; set; }
-        public string? IpAddress { get; set; } = string.Empty;
+        public string IpAddress { get; set; } = string.Empty;
         public string UserAgent { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public User User { get; set; } = null!;
+        public Group? Group { get; set; }  
 
     }
 }
