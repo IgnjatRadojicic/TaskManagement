@@ -22,7 +22,6 @@ namespace TaskManagement.Api.Controllers
             _auditService = auditService;
             _logger = logger;
         }
-
         [HttpPost("register")]
         [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
