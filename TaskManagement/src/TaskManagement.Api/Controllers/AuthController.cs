@@ -7,14 +7,19 @@ namespace TaskManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class AuthController : ControllerBase
+    public class AuthController : BaseApiController
     {
         private readonly IAuthService _authService;
+        private readonly IAuditService _auditService;
         private readonly ILogger<AuthController> _logger;
 
-        public AuthController(IAuthService authService, ILogger<AuthController> logger)
+        public AuthController(
+            IAuthService authService,
+            IAuditService auditService,
+            ILogger<AuthController> logger)
         {
             _authService = authService;
+            _auditService = auditService;
             _logger = logger;
         }
 
@@ -25,19 +30,24 @@ namespace TaskManagement.Api.Controllers
         {
             try
             {
-                var ipAddress = GetIpAddress();
-                var response = await _authService.RegisterAsync(registerDto, ipAddress);
+                var response = await _authService.RegisterAsync(registerDto);
+
+                await LogAuditAsync(
+                    _auditService,
+                    entityType: "User",
+                    entityId: response.UserId,
+                    action: "Registered",
+                    groupId: null);
+
                 return Ok(response);
-
-
             }
-            catch(InvalidOperationException ex)
+            catch (InvalidOperationException ex)
             {
                 return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during user registration");
+                _logger.LogError(ex, "Error during registration");
                 return StatusCode(500, new { message = "An error occurred during registration" });
             }
         }
@@ -49,18 +59,24 @@ namespace TaskManagement.Api.Controllers
         {
             try
             {
-                var ipAddress = GetIpAddress();
-                var response = await _authService.LoginAsync(loginDto, ipAddress);
-                return Ok(response);
+                var response = await _authService.LoginAsync(loginDto);
 
+                await LogAuditAsync(
+                    _auditService,
+                    entityType: "User",
+                    entityId: response.UserId,
+                    action: "Login",
+                    groupId: null);
+
+                return Ok(response);
             }
-            catch(UnauthorizedAccessException ex)
+            catch (UnauthorizedAccessException ex)
             {
                 return Unauthorized(new { message = ex.Message });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during user login");
+                _logger.LogError(ex, "Error during login");
                 return StatusCode(500, new { message = "An error occurred during login" });
             }
         }
@@ -72,10 +88,8 @@ namespace TaskManagement.Api.Controllers
         {
             try
             {
-                var ipAddress = GetIpAddress();
-                var response = await _authService.RefreshTokenAsync(refreshTokenDto.RefreshToken, ipAddress);
+                var response = await _authService.RefreshTokenAsync(refreshTokenDto.RefreshToken);
                 return Ok(response);
-
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -83,51 +97,58 @@ namespace TaskManagement.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during token refresh");
-                return StatusCode(500, new { message = "An error occurred during token refresh" });
+                _logger.LogError(ex, "Error refreshing token");
+                return StatusCode(500, new { message = "An error occurred" });
             }
         }
 
-        [HttpPost("revoke")]
+        [Authorize]
+        [HttpPost("logout")]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public async Task<IActionResult> RevokeToken([FromBody] RefreshTokenDto refreshTokenDto)
+        public async Task<IActionResult> Logout([FromBody] RefreshTokenDto refreshTokenDto)
         {
             try
             {
-                var ipAddress = GetIpAddress();
-                var response = await _authService.RefreshTokenAsync(refreshTokenDto.RefreshToken, ipAddress);
-                return Ok(new { message = "Token revoked successfully" });
+                var userId = GetUserId();
+                await _authService.LogoutAsync(refreshTokenDto.RefreshToken);
 
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
+                await LogAuditAsync(
+                    _auditService,
+                    entityType: "User",
+                    entityId: userId,
+                    action: "Logout",
+                    groupId: null);
+
+                return Ok(new { message = "Logged out successfully" });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during token revocation");
-                return StatusCode(500, new { message = "An error occurred during token revocation" });
+                _logger.LogError(ex, "Error during logout");
+                return StatusCode(500, new { message = "An error occurred" });
             }
         }
 
         [HttpPost("forgot-password")]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto forgotPasswordDto)
         {
             try
             {
-                
-                await _authService.ForgotPasswordAsync(forgotPasswordDto);
-                return Ok(new { message = "If your email exists, you will receive a password reset link" });
-
+                await _authService.ForgotPasswordAsync(forgotPasswordDto.Email);
+                return Ok(new { message = "Password reset email sent" });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during forgot password process");
-                return StatusCode(500, new { message = "If your email exists, you will receive a password reset link" });
+                _logger.LogError(ex, "Error during forgot password");
+                return StatusCode(500, new { message = "An error occurred" });
             }
         }
+
 
         [HttpPost("reset-password")]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -136,26 +157,26 @@ namespace TaskManagement.Api.Controllers
         {
             try
             {
-                await _authService.ResetPasswordAsync(resetPasswordDto);
-                return Ok(new { message = "Password Reset Successfully" });
+                var userId = await _authService.ResetPasswordAsync(resetPasswordDto);
 
+                await LogAuditAsync(
+                    _auditService,
+                    entityType: "User",
+                    entityId: userId,
+                    action: "PasswordReset",
+                    groupId: null);
+
+                return Ok(new { message = "Password reset successfully" });
             }
             catch (InvalidOperationException ex)
             {
-                return Unauthorized(new { message = ex.Message });
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during password reset");
-                return StatusCode(500, new { message = "An error occurred during token password reset" });
+                return StatusCode(500, new { message = "An error occurred" });
             }
-        }
-        private string GetIpAddress()
-        {
-            if (Request.Headers.ContainsKey("X-Forwarder-For"))
-                return Request.Headers["X-Forwarded-For"].ToString();
-
-            return HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
         }
     }
 }
