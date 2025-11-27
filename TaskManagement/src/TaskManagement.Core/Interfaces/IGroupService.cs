@@ -11,10 +11,15 @@ namespace TaskManagement.Core.Interfaces
     {
         Task<GroupDto> CreateGroupAsync(CreateGroupDto createGroupDto, Guid userId);
         Task<GroupDto> JoinGroupAsync(JoinGroupDto joinGroupDto, Guid userId);
-        Task<List<GroupDto>> GetMyGroupsAsync(Guid userId);
+        Task<List<GroupDto>> GetUserGroupsAsync(Guid userId);
         Task<GroupDetailsDto> GetGroupDetailsAsync(Guid groupId, Guid userId);
-        Task UpdateMemberRoleAsync(Guid groupId, Guid memberId, UpdateMemberRoleDto updateRoleDto, Guid requestingUserId);
+        Task<GroupDto> UpdateGroupAsync(Guid groupId, UpdateGroupDto updateGroupDto, Guid userId);
+        Task<GroupMemberDto> ChangeUserRoleAsync(
+                    Guid groupId,
+                    Guid memberId,
+                    ChangeRoleDto changeRoleDto,
+                    Guid userId);
+        Task RemoveUserFromGroupAsync(Guid groupId, Guid memberId, Guid userId);
         Task LeaveGroupAsync(Guid groupId, Guid userId);
-        Task DeleteGroupAsync(Guid groupId, Guid userId);
     }
 }

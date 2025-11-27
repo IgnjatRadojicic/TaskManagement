@@ -37,7 +37,7 @@ namespace TaskManagement.Infrastructure.Services
             var groupCode = await GenerateUniqueGroupCode(createGroupDto.Name);
 
             string? passwordHash = null;
-            if(!string.IsNullOrEmpty(createGroupDto.Password))
+            if (!string.IsNullOrEmpty(createGroupDto.Password))
             {
                 passwordHash = _passwordHasher.HashPassword(createGroupDto.Password);
             }
@@ -47,8 +47,10 @@ namespace TaskManagement.Infrastructure.Services
                 Name = createGroupDto.Name,
                 GroupCode = groupCode,
                 PasswordHash = passwordHash,
+                IsActive = true,
                 OwnerId = userId,
-                IsActive = true
+                CreatedBy = userId,
+                CreatedAt = DateTime.UtcNow
             };
 
             _context.Groups.Add(group);
@@ -58,8 +60,10 @@ namespace TaskManagement.Infrastructure.Services
             {
                 GroupId = group.Id,
                 UserId = userId,
-                Role = GroupRole.Owner,
-                JoinedAt = DateTime.UtcNow
+                RoleId = (int)GroupRole.Owner,
+                JoinedAt = DateTime.UtcNow,
+                CreatedBy = userId,
+                CreatedAt = DateTime.UtcNow
             };
 
             _context.GroupMembers.Add(ownerMember);
@@ -69,42 +73,28 @@ namespace TaskManagement.Infrastructure.Services
             _logger.LogInformation("Group created: {GroupName} with code {GroupCode} by user {UserId}",
                 group.Name, group.GroupCode, userId);
 
-            var owner = await _context.Users.FindAsync(userId);
+            return MapToGroupDto(group, userId);
 
-            return new GroupDto
-            {
-                Id = group.Id,
-                Name = group.Name,
-                GroupCode = group.GroupCode,
-                OwnerId = group.OwnerId,
-                OwnerName = owner.UserName ?? "Unknown",
-                IsActive = group.IsActive,
-                CreatedAt = group.CreatedAt,
-                MemberCount = 1,
-                MyRole = GroupRole.Owner.ToString(),
-            };
         }
 
-       public async Task<GroupDto> JoinGroupAsync(JoinGroupDto joinGroupDto, Guid userId)
+        public async Task<GroupDto> JoinGroupAsync(JoinGroupDto joinGroupDto, Guid userId)
         {
             var group = await _context.Groups
-                .Include(g => g.Members)
-                .Include(g => g.Owner)
                 .FirstOrDefaultAsync(g => g.GroupCode == joinGroupDto.GroupCode);
             if (group == null)
             {
                 throw new InvalidOperationException("Invalid group code");
 
             }
-            if(!group.IsActive)
+            if (!group.IsActive)
             {
                 throw new InvalidOperationException("This group is no longer active");
             }
 
             var existingMember = await _context.GroupMembers
                 .FirstOrDefaultAsync(gm => gm.GroupId == group.Id && gm.UserId == userId);
-            
-            if(existingMember != null)
+
+            if (existingMember != null)
             {
                 throw new InvalidOperationException("This user already exists");
             }
@@ -115,7 +105,7 @@ namespace TaskManagement.Infrastructure.Services
                 {
                     throw new UnauthorizedAccessException("This group requires a password");
                 }
-                if(!_passwordHasher.VerifyPassword(joinGroupDto.Password, group.PasswordHash))
+                if (!_passwordHasher.VerifyPassword(joinGroupDto.Password, group.PasswordHash))
                 {
                     throw new UnauthorizedAccessException("Incorrect group password");
                 }
@@ -124,8 +114,10 @@ namespace TaskManagement.Infrastructure.Services
             var newMember = new GroupMember {
                 GroupId = group.Id,
                 UserId = userId,
-                Role = GroupRole.Member,
-                JoinedAt = DateTime.UtcNow
+                RoleId = (int)GroupRole.Member,
+                JoinedAt = DateTime.UtcNow,
+                CreatedBy = userId,
+                CreatedAt = DateTime.UtcNow
 
             };
 
@@ -133,41 +125,27 @@ namespace TaskManagement.Infrastructure.Services
 
             await _context.SaveChangesAsync();
 
-            return new GroupDto
-            {
-                Id = group.Id,
-                Name = group.Name,
-                GroupCode = group.GroupCode,
-                OwnerId = group.OwnerId,
-                OwnerName = group.Owner.UserName,
-                IsActive = group.IsActive,
-                CreatedAt = DateTime.UtcNow,
-                MemberCount = group.Members.Count + 1,
-                MyRole = GroupRole.Member.ToString()
-            };
+            return MapToGroupDto(group, userId);
         }
 
-        public async Task<List<GroupDto>> GetMyGroupsAsync(Guid userId)
+        public async Task<List<GroupDto>> GetUserGroupsAsync(Guid userId)
         {
             // Databse -> DTO -> List
             var groups = await _context.GroupMembers
                 .Where(gm => gm.UserId == userId)
                 .Include(gm => gm.Group)
-                    .ThenInclude(g => g.Owner)
-                .Include(gm => gm.Group)
-                    .ThenInclude(g => g.Members)
+                .Include(gm => gm.Role)
 
                 .Select(gm => new GroupDto
                 {
                     Id = gm.Group.Id,
                     Name = gm.Group.Name,
                     GroupCode = gm.Group.GroupCode,
-                    OwnerId = gm.Group.OwnerId,
-                    OwnerName = gm.Group.Owner.UserName,
-                    IsActive = gm.Group.IsActive,
+                    IsPasswordProtected = !string.IsNullOrEmpty(gm.Group.PasswordHash),
+                    MemberCount = _context.GroupMembers.Count(m => m.GroupId == gm.GroupId),
+                    UserRole = (GroupRole)gm.RoleId,
+                    JoinedAt = gm.JoinedAt,
                     CreatedAt = gm.Group.CreatedAt,
-                    MemberCount = gm.Group.Members.Count,
-                    MyRole = gm.Role.ToString()
 
                 }).ToListAsync();
 
@@ -177,33 +155,36 @@ namespace TaskManagement.Infrastructure.Services
         public async Task<GroupDetailsDto> GetGroupDetailsAsync(Guid groupId, Guid userId)
         {
             var membership = await _context.GroupMembers
+                .Include(gm => gm.Role)
                 .FirstOrDefaultAsync(gm => gm.GroupId == groupId && gm.UserId == userId);
-            if(membership == null)
+            if (membership == null)
             {
                 throw new UnauthorizedAccessException("You are not a member of this group");
             }
 
             var group = await _context.Groups
                 .Include(g => g.Owner)
-                .Include(g => g.Members)
-                    .ThenInclude(m => m.User)
                 .FirstOrDefaultAsync(g => g.Id == groupId);
 
-            if(group == null)
+            if (group == null)
             {
                 throw new UnauthorizedAccessException("Group not found");
             }
 
-            var members = group.Members.Select(m => new GroupMemberDto
-            {
-                UserId = m.UserId,
-                UserName = m.User.UserName,
-                Email = m.User.Email,
-                Role = m.Role,
-                JoinedAt = m.JoinedAt
+            var members = await _context.GroupMembers
+                .Where(gm => gm.GroupId == groupId)
+                .Include(gm => gm.User)
+                .Include(gm => gm.Role)
+                .Select(gm => new GroupMemberDto
+                {
+                    UserId = gm.UserId,
+                    UserName = gm.User.UserName,
+                    Email = gm.User.Email,
+                    Role = (GroupRole)gm.RoleId,
+                    JoinedAt = gm.JoinedAt
 
 
-            }).ToList();
+                }).ToListAsync();
 
 
             return new GroupDetailsDto
@@ -211,62 +192,152 @@ namespace TaskManagement.Infrastructure.Services
                 Id = group.Id,
                 Name = group.Name,
                 GroupCode = group.GroupCode,
+                IsPasswordProtected = !string.IsNullOrEmpty(group.PasswordHash),
                 OwnerId = group.OwnerId,
-                IsActive = group.IsActive,
-                HasPassword = !string.IsNullOrEmpty(group.PasswordHash),
+                OwnerName = group.Owner.UserName,
                 CreatedAt = group.CreatedAt,
                 Members = members
             };
         }
 
-        public async Task UpdateMemberRoleAsync(Guid groupId, Guid memberId, UpdateMemberRoleDto updateRoleDto, Guid requestingUserId)
+        public async Task<GroupDto> UpdateGroupAsync(Guid groupId, UpdateGroupDto updateGroupDto, Guid userId)
+        {
+            var group = await _context.Groups.FindAsync(groupId);
+
+            if (group == null)
+            {
+                throw new KeyNotFoundException("Group not found");
+            }
+
+            var membership = await _context.GroupMembers
+                .FirstOrDefaultAsync(gm => gm.GroupId == groupId && gm.UserId == userId);
+
+            if (membership == null)
+            {
+                throw new UnauthorizedAccessException("You are not a member of this group");
+            }
+
+            var userRole = (GroupRole)membership.RoleId;
+
+
+            if (userRole != GroupRole.Owner && userRole != GroupRole.Manager)
+            {
+                throw new UnauthorizedAccessException("You don't have permission to update member roles");
+            }
+
+            if (!string.IsNullOrEmpty(updateGroupDto.Name))
+            {
+                group.Name = updateGroupDto.Name;
+            }
+
+            if (updateGroupDto.Password != null)
+            {
+                group.PasswordHash = string.IsNullOrEmpty(updateGroupDto.Password)
+                    ? null : _passwordHasher.HashPassword(updateGroupDto.Password);
+            }
+
+            group.UpdatedBy = userId;
+            group.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return MapToGroupDto(group, userId);
+
+        }
+        public async Task<GroupMemberDto> ChangeUserRoleAsync(
+            Guid groupId,
+            Guid memberId,
+            ChangeRoleDto changeRoleDto,
+            Guid userId)
         {
             var requestingMembership = await _context.GroupMembers
-                .FirstOrDefaultAsync(gm => gm.GroupId == groupId && gm.UserId == requestingUserId);
+                .FirstOrDefaultAsync(gm => gm.GroupId == groupId && gm.UserId == userId);
 
             if (requestingMembership == null)
             {
                 throw new UnauthorizedAccessException("You are not a member of this group");
             }
 
-            if(requestingMembership.Role != GroupRole.Owner && requestingMembership.Role != GroupRole.Manager)
+            var requestingRole = (GroupRole)requestingMembership.RoleId;
+            if (requestingRole != GroupRole.Owner && requestingRole != GroupRole.Manager)
             {
-                throw new UnauthorizedAccessException("You don't have permission to update member roles");
+                throw new UnauthorizedAccessException("Only Owner or Manager can change roles");
             }
 
-            var targetMembers = await _context.GroupMembers
-                .FirstOrDefaultAsync(gm => gm.UserId == memberId && gm.GroupId == groupId);
+            var targetMembership = await _context.GroupMembers
+                .Include(gm => gm.User)
+                .FirstOrDefaultAsync(gm => gm.GroupId == groupId && gm.UserId == userId);
 
-
-            if(targetMembers ==  null)
+            if (targetMembership == null)
             {
-                throw new InvalidOperationException("Member not found in this group");
+                throw new KeyNotFoundException("Member not found in this group");
             }
-            if (targetMembers.Role == GroupRole.Owner)
+
+            if ((GroupRole)targetMembership.RoleId == GroupRole.Owner)
             {
-                throw new InvalidOperationException("Cannot change the owner's role");
+                throw new InvalidOperationException("Cannot change the role of group Owner");
+            }
+
+            targetMembership.RoleId = (int)changeRoleDto.NewRole;
+            targetMembership.UpdatedBy = userId;
+            targetMembership.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Role changed for member {MemberId} to {NewRole}", memberId, changeRoleDto.NewRole);
+
+            return new GroupMemberDto
+            {
+                UserId = targetMembership.UserId,
+                UserName = targetMembership.User.UserName,
+                Email = targetMembership.User.Email,
+                Role = changeRoleDto.NewRole,
+                JoinedAt = targetMembership.JoinedAt
+            };
+        }
+
+        public async Task RemoveUserFromGroupAsync(Guid groupId, Guid memberId, Guid userId)
+        {
+            _logger.LogInformation("User {UserId} removing member {MemberId} from group {GroupId}",
+                userId, memberId, groupId);
+
+            var requestingMembership = await _context.GroupMembers
+                .FirstOrDefaultAsync(gm => gm.GroupId == groupId && gm.UserId == userId);
+
+            if (requestingMembership == null)
+            {
+                throw new UnauthorizedAccessException("You are not a member of this group");
+            }
+
+            var requestingRole = (GroupRole)requestingMembership.RoleId;
+            if (requestingRole != GroupRole.Owner && requestingRole != GroupRole.Manager)
+            {
+                throw new UnauthorizedAccessException("Only Owner or Manager can remove members");
             }
 
             
-            if (updateRoleDto.Role == GroupRole.Owner)
+            var targetMembership = await _context.GroupMembers
+                .FirstOrDefaultAsync(gm => gm.GroupId == groupId && gm.UserId == memberId);
+
+            if (targetMembership == null)
             {
-                throw new InvalidOperationException("Cannot promote member to owner");
+                throw new KeyNotFoundException("Member not found in this group");
             }
 
-          
-            if (requestingMembership.Role == GroupRole.Manager)
+            
+            if ((GroupRole)targetMembership.RoleId == GroupRole.Owner)
             {
-                if (targetMembers.Role == GroupRole.Manager || updateRoleDto.Role == GroupRole.Manager)
-                {
-                    throw new UnauthorizedAccessException("Managers cannot manage other managers");
-                }
+                throw new InvalidOperationException("Cannot remove the group owner");
             }
 
-            targetMembers.Role = updateRoleDto.Role;
+            targetMembership.IsDeleted = true;
+            targetMembership.DeletedAt = DateTime.UtcNow;
+            targetMembership.DeletedBy = userId;
+
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("User {RequestingUserId} updated role of user {MemberId} to {NewRole} in group {GroupId}",
-                requestingUserId, memberId, updateRoleDto.Role, groupId);
+            _logger.LogInformation("Member {MemberId} removed from group {GroupId}", memberId, groupId);
+
+
         }
 
         public async Task LeaveGroupAsync(Guid groupId, Guid userId)
@@ -279,39 +350,37 @@ namespace TaskManagement.Infrastructure.Services
                 throw new InvalidOperationException("You are not a member of this group");
             }
 
-            if (membership.Role == GroupRole.Owner)
+            if ((GroupRole)membership.RoleId == GroupRole.Owner)
             {
                 throw new InvalidOperationException("Group owner cannot leave. Delete the group instead or transfer ownership.");
             }
 
-            _context.GroupMembers.Remove(membership);
+            membership.IsDeleted = true;
+            membership.DeletedAt = DateTime.UtcNow;
+            membership.DeletedBy = userId;
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("User {UserId} left group {GroupId}", userId, groupId);
         }
-        public async Task DeleteGroupAsync(Guid groupId, Guid userId)
+        
+        private GroupDto MapToGroupDto(Group group, Guid userId)
         {
-            var group = await _context.Groups
-                .Include(g => g.Members)
-                .FirstOrDefaultAsync(g => g.Id == groupId);
+            var memberCount = _context.GroupMembers.Count(gm => gm.GroupId == group.Id);
+            var userMembership = _context.GroupMembers
+                .FirstOrDefault(gm => gm.GroupId == group.Id && gm.UserId == userId);
 
-            if (group == null)
+            return new GroupDto
             {
-                throw new InvalidOperationException("Group not found");
-            }
-
-            if(group.OwnerId != userId)
-            {
-                throw new UnauthorizedAccessException("Only the group owner can delete the group");
-            }
-
-            _context.GroupMembers.RemoveRange(group.Members);
-            _context.Groups.Remove(group);
-
-            await _context.SaveChangesAsync();
-            _logger.LogInformation("Group {GroupId} deleted by owner {UserId}", groupId, userId);
+                Id = group.Id,
+                Name = group.Name,
+                GroupCode = group.GroupCode,
+                IsPasswordProtected = !string.IsNullOrEmpty(group.PasswordHash),
+                MemberCount = memberCount,
+                UserRole = userMembership != null ? (GroupRole)userMembership.RoleId : GroupRole.Member,
+                JoinedAt = userMembership?.JoinedAt ?? DateTime.UtcNow,
+                CreatedAt = group.CreatedAt
+            };
         }
-
         public async Task<string> GenerateUniqueGroupCode(string groupName)
         {
             string code;
