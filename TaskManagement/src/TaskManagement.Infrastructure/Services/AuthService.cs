@@ -12,6 +12,8 @@ using TaskManagement.Core.Common;
 using TaskManagement.Core.DTO.Auth;
 using TaskManagement.Core.Entities;
 using TaskManagement.Core.Interfaces;
+using TaskManagement.Core.Models;
+using Microsoft.Extensions.Configuration;
 
 namespace TaskManagement.Infrastructure.Services
 {
@@ -22,279 +24,268 @@ namespace TaskManagement.Infrastructure.Services
         private readonly IPasswordHasher _passwordHasher;
         private readonly IJwtTokenGenerator _tokenGenerator;
         private readonly IEmailService _emailService;
-        private readonly JwtSettings _jwtSettings;
+        private readonly IRedisService _redisService;
         private readonly ILogger<AuthService> _logger;
+        private readonly IConfiguration _configuration;
 
         public AuthService(
             IApplicationDbContext context,
             IPasswordHasher passwordHasher,
             IJwtTokenGenerator tokenGenerator,
             IEmailService emailService,
-            IOptions<JwtSettings> jwtSettings,
-            ILogger<AuthService> logger)
+            ILogger<AuthService> logger,
+            IConfiguration configuration,
+            IRedisService redisService)
         {
             _context = context;
+            _redisService = redisService;
             _passwordHasher = passwordHasher;
             _tokenGenerator = tokenGenerator;
+            _configuration = configuration;
             _emailService = emailService;
-            _jwtSettings = jwtSettings.Value;
             _logger = logger;
 
         }
 
-        public async Task<AuthResponseDto> LoginAsync(LoginDto loginDto, string ipAddress)
+        public async Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto)
         {
-            var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
-            if (user == null)
-            {
-                _logger.LogWarning("Login attempt with non-existent email: {Email}", loginDto.Email);
-                throw new UnauthorizedAccessException("Invalid email or password");
-            }
+            _logger.LogInformation("Attempting to register user with email: {Email}", registerDto.Email);
 
-            if(!_passwordHasher.VerifyPassword(loginDto.Password, user.PasswordHash))
-            {
-                _logger.LogWarning("Failed login attempt for user: {Email}", loginDto.Email);
-                throw new UnauthorizedAccessException("Invalid email or password");
-            }
-            if (!user.IsActive)
-            {
-                _logger.LogWarning("Login attempt for deactivated account: {Email}", loginDto.Email);
-                throw new UnauthorizedAccessException("User account is deactivated");
-            }
-
-            _logger.LogInformation("User logged in successfully: {Email}", user.Email);
-
-            
-            return await GenerateAuthResponse(user, ipAddress);
-
-        }
-
-        public async Task<AuthResponseDto> RefreshTokenAsync(string refreshToken, string ipAddress)
-        {
-            var tokenHash = HashToken(refreshToken);
-
-            var storedToken = await _context.RefreshTokens
-                .Include(rt => rt.User)
-                .FirstOrDefaultAsync(rt => rt.Token == tokenHash);
-
-            if(storedToken == null)
-            {
-                _logger.LogWarning("Refresh token not found");
-                throw new UnauthorizedAccessException("Invalid refresh token");
-            }
-            if (!storedToken.IsActive)
-            {
-                _logger.LogWarning("Inactive refresh token used for user: {UserId}", storedToken.UserId);
-                throw new UnauthorizedAccessException("Invalid refresh token");
-            }
-
-            var user = storedToken.User;
-
-            // Revoking old refresh token
-            storedToken.RevokedAt = DateTime.UtcNow;
-            storedToken.RevokedByIp = ipAddress;
-
-            // Getting new token
-            var newAuthResponse = await GenerateAuthResponse(user, ipAddress);
-
-            // Putting old token as replaced
-            storedToken.ReplacedByToken = HashToken(newAuthResponse.RefreshToken);
-
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Refresh token rotated for user: {Email}", user.Email);
-
-            return newAuthResponse;
-        }
-
-
-
-        public async Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto, string ipAddress)
-        {
             var existingUser = await _context.Users
                 .FirstOrDefaultAsync(u => u.Email == registerDto.Email || u.UserName == registerDto.UserName);
 
-            if(existingUser != null)
+            if (existingUser != null)
             {
                 if (existingUser.Email == registerDto.Email)
                     throw new InvalidOperationException("A user with this email already exists");
                 throw new InvalidOperationException("A user with username already exists");
             }
 
-            var passwordHash = _passwordHasher.HashPassword(registerDto.Password);
-
 
             var user = new User
             {
                 UserName = registerDto.UserName,
                 Email = registerDto.Email,
-                PasswordHash = passwordHash,
-                IsActive = true
+                PasswordHash = _passwordHasher.HashPassword(registerDto.Password),
+                FirstName = registerDto.FirstName,
+                LastName = registerDto.LastName,
+                IsEmailConfirmed = false,
+                CreatedAt = DateTime.UtcNow
+
             };
+
+
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("New user registered: {Email}", user.Email);
 
-            _ = _emailService.SendWelcomeEmailAsync(user.Email, user.UserName);
-
-            return await GenerateAuthResponse(user, ipAddress);
-        }
-
-        public async Task<bool> ForgotPasswordAsync(ForgotPasswordDto forgotPasswordDto)
-        {
-            var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == forgotPasswordDto.Email);
-
-            if(user == null)
+            try
             {
-                _logger.LogInformation("Password reset requested for non existant email");
-                return true;
+                await _emailService.SendWelcomeEmailAsync(user.Email, user.UserName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send the welcome email");
             }
 
-            // Invalidating any existing reset tokens for specific user
-            var existingTokens = await _context.PasswordResetTokens
-                  .Where(t => t.UserId == user.Id && t.IsValid)
-                  .ToListAsync();
-
-            foreach( var token in existingTokens)
-            {
-                token.UsedAt = DateTime.UtcNow;
-            }
-
-            var resetToken = GenerateSecureToken();
-            var tokenHash = HashToken(resetToken);
-
-            var passwordResetToken = new PasswordResetToken
-            {
-                UserId = user.Id,
-                Token = tokenHash,
-                ExpiresAt = DateTime.UtcNow.AddHours(1)
-            };
-
-            _context.PasswordResetTokens.Add(passwordResetToken);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Password reset token generated for user: {Email}", user.Email);
-
-            await _emailService.SendPasswordResetEmailAsync(user.Email, resetToken);
-
-            return true;
-        }
-
-
-
-        public async Task<bool> ResetPasswordAsync(ResetPasswordDto resetPasswordDto)
-        {
-            var tokenHash = HashToken(resetPasswordDto.Token);
-
-            var resetToken = await _context.PasswordResetTokens
-                .Include(t => t.User)
-                .FirstOrDefaultAsync(t => t.Token == tokenHash && t.User.Email == resetPasswordDto.Email);
-
-            if (resetToken == null)
-            {
-                _logger.LogWarning("Invalid password reset token used for email: {Email}", resetPasswordDto.Email);
-                throw new InvalidOperationException("Invalid or expired reset token");
-            }
-
-            if (!resetToken.IsValid)
-            {
-                _logger.LogWarning("Expired or used reset token for email: {Email}", resetPasswordDto.Email);
-                throw new InvalidOperationException("Invalid or expired reset token");
-            }
-
-            var user = resetToken.User;
-            user.PasswordHash = _passwordHasher.HashPassword(resetPasswordDto.NewPassword);
-
-            resetToken.UsedAt = DateTime.UtcNow;
-
-            var refreshTokens = await _context.RefreshTokens
-                .Where(rt => rt.UserId == user.Id && rt.IsActive)
-                .ToListAsync();
-
-            foreach(var rt in refreshTokens)
-            {
-                rt.RevokedAt = DateTime.UtcNow;
-                rt.RevokedByIp = "PasswordReset";
-            }
-
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Password reset successfully for user: {Email}", user.Email);
-
-            return true;
-        }
-
-        public async Task RevokeTokenAsync(string refreshToken, string ipAddress)
-        {
-            var tokenHash = HashToken(refreshToken);
-
-            var storedToken = await _context.RefreshTokens
-                .FirstOrDefaultAsync(rt => rt.Token == tokenHash);
-
-            if (storedToken == null)
-            {
-                throw new InvalidOperationException("Invalid refresh token");
-            }
-            if (!storedToken.IsActive)
-            {
-                throw new InvalidOperationException("Token is already rvoked");
-            }
-
-            storedToken.RevokedAt = DateTime.UtcNow;
-            storedToken.RevokedByIp = ipAddress;
-
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Refresh token revoked for user: {UserId}", storedToken.UserId);
-        }
-
-
-        private async Task<AuthResponseDto> GenerateAuthResponse(User user, string ipAddress)
-        {
             var accessToken = _tokenGenerator.GenerateAccessToken(user);
             var refreshToken = _tokenGenerator.GenerateRefreshToken();
-            var refreshTokenHash = HashToken(refreshToken);
 
-            var refreshTokenEntity = new RefreshToken
-            {
-                UserId = user.Id,
-                Token = refreshTokenHash,
-                ExpiresAt = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpiryInDays),
-                CreatedByIp = ipAddress
-            };
 
-            _context.RefreshTokens.Add(refreshTokenEntity);
-            await _context.SaveChangesAsync();
+
+            await StoreRefreshTokenAsync(user.Id, refreshToken, "Unknown");
 
             return new AuthResponseDto
             {
                 AccessToken = accessToken,
                 RefreshToken = refreshToken,
+                UserId = user.Id,
                 UserName = user.UserName,
-                Email = user.Email,
-                AccessTokenExpiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpiryInMinutes),
-                RefreshTokenExpiresAt = refreshTokenEntity.ExpiresAt
+                Email = user.Email
             };
         }
-        private static string GenerateSecureToken()
+
+        public async Task<AuthResponseDto> LoginAsync(LoginDto loginDto)
         {
-            var randomNumber = new byte[32];
-            using var rng = RandomNumberGenerator.Create();
-            rng.GetBytes(randomNumber);
-            return Convert.ToBase64String(randomNumber);
+            _logger.LogInformation("Login attempt for email: {Email}", loginDto.Email);
+
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
+
+            if (user == null || !_passwordHasher.VerifyPassword(loginDto.Password, user.PasswordHash))
+            {
+                _logger.LogWarning("Login attempt with non-existent email: {Email}", loginDto.Email);
+                throw new UnauthorizedAccessException("Invalid email or password");
+            }
+
+            user.LastLoginAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("User logged in successfully: {Email}", user.Email);
+
+
+
+            var accessToken = _tokenGenerator.GenerateAccessToken(user);
+            var refreshToken = _tokenGenerator.GenerateRefreshToken();
+
+            return new AuthResponseDto
+            {
+                AccessToken = accessToken,
+                RefreshToken = refreshToken,
+                UserId = user.Id,
+                UserName = user.UserName,
+                Email = user.Email
+            };
         }
-        private static string HashToken(string token)
+
+        public async Task<AuthResponseDto> RefreshTokenAsync(string refreshToken)
         {
-            using var sha256 = SHA256.Create();
-            var bytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(token));
-            return Convert.ToBase64String(bytes);
+            _logger.LogInformation("Attempting to refresh token");
+
+            var tokenModel = await _redisService.GetRefreshTokenAsync(refreshToken);
+
+            if (tokenModel == null)
+            {
+                throw new UnauthorizedAccessException("Invalid refresh token");
+            }
+            if (tokenModel.IsRevoked)
+            {
+                throw new UnauthorizedAccessException("Token has been revoked");
+            }
+            if (tokenModel.ExpiresAt < DateTime.UtcNow)
+            {
+                throw new UnauthorizedAccessException("Token has  expired");
+            }
+
+            var user = await _context.Users.FindAsync(tokenModel.UserId);
+
+            if (user == null)
+            {
+                throw new UnauthorizedAccessException("User not found");
+            }
+
+            var newAccessToken = _tokenGenerator.GenerateAccessToken(user);
+            var newRefreshToken = _tokenGenerator.GenerateRefreshToken();
+
+            await _redisService.RevokeRefreshTokenAsync(refreshToken);
+            await StoreRefreshTokenAsync(user.Id, newRefreshToken, tokenModel.CreatedByIp);
+
+            _logger.LogInformation("Token refreshed for user: {UserId}", user.Id);
+
+            return new AuthResponseDto
+            {
+                AccessToken = newAccessToken,
+                RefreshToken = newRefreshToken,
+                UserId = user.Id,
+                UserName = user.UserName,
+                Email = user.Email
+            };
+        }
+
+        public async Task LogoutAsync(string refreshToken)
+        {
+            _logger.LogInformation("User logging out");
+
+            await _redisService.RevokeRefreshTokenAsync(refreshToken);
+        }
+
+
+
+        public async Task ForgotPasswordAsync(string email)
+        {
+            _logger.LogInformation("Password reset requested for email: {Email}", email);
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+            if (user == null)
+            {
+                throw new KeyNotFoundException("User with this email does not exist");
+            }
+
+            var resetToken = Guid.NewGuid().ToString("N");
+            var tokenHash = _passwordHasher.HashPassword(resetToken);
+
+            var passwordResetToken = new PasswordResetToken
+            {
+                UserId = user.Id,
+                TokenHash = tokenHash,
+                ExpiresAt = DateTime.UtcNow.AddHours(1),
+                IsUsed = false,
+                IpAddress = "Unknown",
+                CreatedAt = DateTime.UtcNow
+
+            };
+
+            _context.PasswordResetTokens.Add(passwordResetToken);
+            await _context.SaveChangesAsync();
+
+
+            var resetLink = $"willset?token={resetToken}";
+            await _emailService.SendPasswordResetEmailAsync(user.Email, user.UserName, resetLink);
+            _logger.LogInformation("Password reset email sent to: {Email}", email);
+        }
+
+
+
+        public async Task<Guid> ResetPasswordAsync(ResetPasswordDto resetPasswordDto)
+        {
+            _logger.LogInformation("Attempting password reset with token");
+
+            var allTokens = await _context.PasswordResetTokens
+                .Include(rt => rt.User)
+                .Where(rt => !rt.IsUsed && rt.ExpiresAt > DateTime.UtcNow)
+                .ToListAsync();
+
+            PasswordResetToken? resetToken = null;
+            foreach (var token in allTokens)
+            {
+                if (_passwordHasher.VerifyPassword(resetPasswordDto.Token, token.TokenHash))
+                {
+                    resetToken = token;
+                    break;
+                }
+            }
+
+            if (resetToken == null)
+            {
+                throw new InvalidOperationException("Invalid or expired reset token");
+            }
+
+            var user = resetToken.User;
+            user.PasswordHash = _passwordHasher.HashPassword(resetPasswordDto.NewPassword);
+            user.UpdatedAt = DateTime.UtcNow;
+
+            resetToken.IsUsed = true;
+            resetToken.UsedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Password reset successfully for user: {UserId}", user.Id);
+
+            return user.Id;
 
         }
 
+
+        private async Task StoreRefreshTokenAsync(Guid userId, string refreshToken, string ipAddress)
+        {
+            var tokenModel = new RefreshTokenModel
+            {
+                UserId = userId,
+                TokenHash = _passwordHasher.HashPassword(refreshToken),
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddDays(
+            int.Parse(_configuration["Jwt:RefreshTokenExpirationDays"] ?? "7")),
+                CreatedByIp = ipAddress,
+                IsRevoked = false
+            };
+
+            var expiration = tokenModel.ExpiresAt - DateTime.UtcNow;
+            await _redisService.SetRefreshTokenAsync(refreshToken, tokenModel, expiration);
+        }
     }
 }

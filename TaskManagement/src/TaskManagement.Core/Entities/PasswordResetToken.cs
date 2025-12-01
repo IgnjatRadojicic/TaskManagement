@@ -12,7 +12,7 @@ namespace TaskManagement.Core.Entities
         public Guid UserId { get; set; }
         public string TokenHash { get; set; } = string.Empty; 
         public DateTime ExpiresAt { get; set; }
-        public bool IsUSed { get; set; } = false;
+        public bool IsUsed { get; set; } = false;
         public DateTime? UsedAt { get; set; }
         public string IpAddress { get; set; } = string.Empty;
         
