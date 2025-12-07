@@ -36,6 +36,12 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
+            if (entityType.ClrType == typeof(AuditLog) ||
+             entityType.ClrType == typeof(PasswordResetToken))
+            {
+                continue;
+            }
+
             if (typeof(BaseEntity).IsAssignableFrom(entityType.ClrType))
             {
                 var parameter = Expression.Parameter(entityType.ClrType, "e");
@@ -200,7 +206,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasOne(e => e.User)
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired(false);
 
 
         });
@@ -214,10 +221,10 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.Color).HasMaxLength(20);
 
             entity.HasData(
-                new TaskStatusLookup { Id = 0, Name = "NotStarted", DisplayName = "Not Started", Description = "Task has not been started yet", Color = "#6c757d", DisplayOrder = 1, IsActive = true },
-                new TaskStatusLookup { Id = 1, Name = "InProgress", DisplayName = "In Progress", Description = "Task is currently being worked on", Color = "#0dcaf0", DisplayOrder = 2, IsActive = true },
-                new TaskStatusLookup { Id = 2, Name = "UnderReview", DisplayName = "Under Review", Description = "Task is under review", Color = "#ffc107", DisplayOrder = 3, IsActive = true },
-                new TaskStatusLookup { Id = 3, Name = "Completed", DisplayName = "Completed", Description = "Task is completed", Color = "#198754", DisplayOrder = 4, IsActive = true }
+                new TaskStatusLookup { Id = 1, Name = "NotStarted", DisplayName = "Not Started", Description = "Task has not been started yet", Color = "#6c757d", DisplayOrder = 1, IsActive = true },
+                new TaskStatusLookup { Id = 2, Name = "InProgress", DisplayName = "In Progress", Description = "Task is currently being worked on", Color = "#0dcaf0", DisplayOrder = 2, IsActive = true },
+                new TaskStatusLookup { Id = 3, Name = "UnderReview", DisplayName = "Under Review", Description = "Task is under review", Color = "#ffc107", DisplayOrder = 3, IsActive = true },
+                new TaskStatusLookup { Id = 4, Name = "Completed", DisplayName = "Completed", Description = "Task is completed", Color = "#198754", DisplayOrder = 4, IsActive = true }
             );
         });
 
@@ -229,10 +236,10 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.Color).HasMaxLength(20);
 
             entity.HasData(
-                new TaskPriorityLookup { Id = 0, Name = "Low", Description = "Low priority task", Color = "#6c757d", DisplayOrder = 1, IsActive = true },
-                new TaskPriorityLookup { Id = 1, Name = "Medium", Description = "Medium priority task", Color = "#0dcaf0", DisplayOrder = 2, IsActive = true },
-                new TaskPriorityLookup { Id = 2, Name = "High", Description = "High priority task", Color = "#ffc107", DisplayOrder = 3, IsActive = true },
-                new TaskPriorityLookup { Id = 3, Name = "Urgent", Description = "Urgent priority task", Color = "#dc3545", DisplayOrder = 4, IsActive = true }
+                new TaskPriorityLookup { Id = 1, Name = "Low", Description = "Low priority task", Color = "#6c757d", DisplayOrder = 1, IsActive = true },
+                new TaskPriorityLookup { Id = 2, Name = "Medium", Description = "Medium priority task", Color = "#0dcaf0", DisplayOrder = 2, IsActive = true },
+                new TaskPriorityLookup { Id = 3, Name = "High", Description = "High priority task", Color = "#ffc107", DisplayOrder = 3, IsActive = true },
+                new TaskPriorityLookup { Id = 4, Name = "Urgent", Description = "Urgent priority task", Color = "#dc3545", DisplayOrder = 4, IsActive = true }
             );
         });
 
@@ -244,10 +251,10 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.Description).HasMaxLength(200);
 
             entity.HasData(
-                new GroupRoleLookup { Id = 0, Name = "Owner", DisplayName = "Owner", Description = "Full control over the group", PermissionLevel = 100, IsActive = true },
-                new GroupRoleLookup { Id = 1, Name = "Manager", DisplayName = "Manager", Description = "Can manage members and tasks", PermissionLevel = 75, IsActive = true },
-                new GroupRoleLookup { Id = 2, Name = "TeamLead", DisplayName = "Team Lead", Description = "Can manage tasks", PermissionLevel = 50, IsActive = true },
-                new GroupRoleLookup { Id = 3, Name = "Member", DisplayName = "Member", Description = "Can view and work on tasks", PermissionLevel = 25, IsActive = true }
+                new GroupRoleLookup { Id = 1, Name = "Owner", DisplayName = "Owner", Description = "Full control over the group", PermissionLevel = 100, IsActive = true },
+                new GroupRoleLookup { Id = 2, Name = "Manager", DisplayName = "Manager", Description = "Can manage members and tasks", PermissionLevel = 75, IsActive = true },
+                new GroupRoleLookup { Id = 3, Name = "TeamLead", DisplayName = "Team Lead", Description = "Can manage tasks", PermissionLevel = 50, IsActive = true },
+                new GroupRoleLookup { Id = 4, Name = "Member", DisplayName = "Member", Description = "Can view and work on tasks", PermissionLevel = 25, IsActive = true }
             );
         });
 
@@ -258,22 +265,33 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasIndex(e => e.EntityType);
             entity.HasIndex(e => e.EntityId);
             entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.GroupId);
             entity.HasIndex(e => e.CreatedAt);
 
             entity.Property(e => e.EntityType).HasMaxLength(50).IsRequired();
             entity.Property(e => e.Action).HasMaxLength(50).IsRequired();
+
+            entity.Property(e => e.UserName).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.UserEmail).HasMaxLength(256).IsRequired();
+
             entity.Property(e => e.PropertyName).HasMaxLength(100);
-            entity.Property(e => e.NewValue).HasMaxLength(1000);
             entity.Property(e => e.OldValue).HasMaxLength(1000);
-            entity.Property(e => e.Reason).HasMaxLength(1000);
-            entity.Property(e => e.IpAddress).HasMaxLength(1000);
-            entity.Property(e => e.UserAgent).HasMaxLength(1000);
+            entity.Property(e => e.NewValue).HasMaxLength(1000);
+            entity.Property(e => e.Reason).HasMaxLength(500);
+            entity.Property(e => e.IpAddress).HasMaxLength(45);
+            entity.Property(e => e.UserAgent).HasMaxLength(500);
 
             entity.HasOne(e => e.User)
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false);  
 
+            entity.HasOne(e => e.Group)
+                .WithMany()
+                .HasForeignKey(e => e.GroupId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false);  
         });
 
     }

@@ -20,6 +20,8 @@ namespace TaskManagement.Infrastructure.Services
         }
 
         public async Task LogAsync(
+
+
             string entityType,
             Guid entityId,
             string action,
@@ -35,6 +37,14 @@ namespace TaskManagement.Infrastructure.Services
         {
             try
             {
+
+                var user = await _context.Users.FindAsync(userId);
+                if (user == null)
+                {
+                    _logger.LogWarning("Cannot create audit log for non-existent user {UserId}", userId);
+                    return;
+                }
+
                 var auditLog = new AuditLog
                 {
                     EntityType = entityType,
@@ -44,6 +54,8 @@ namespace TaskManagement.Infrastructure.Services
                     OldValue = oldValue,
                     NewValue = newValue,
                     UserId = userId,
+                    UserName = user.UserName,
+                    UserEmail = user.Email,
                     GroupId = groupId,
                     Reason = reason,
                     IpAddress = ipAddress ?? "Unknown",
@@ -81,7 +93,6 @@ namespace TaskManagement.Infrastructure.Services
                 }
                 var logs = await _context.AuditLogs
                     .Where(a => a.EntityType == entityType && a.EntityId == entityId)
-                    .Include(a => a.User)
                     .OrderByDescending(a => a.CreatedAt)
                     .Select(a => new AuditLogDto
                     {
@@ -93,7 +104,8 @@ namespace TaskManagement.Infrastructure.Services
                         OldValue = a.OldValue,
                         NewValue = a.NewValue,
                         UserId = a.UserId,
-                        UserName = a.User.UserName,
+                        UserName = a.UserName,
+                        UserEmail = a.UserEmail,
                         Timestamp = a.CreatedAt,
                         Reason = a.Reason,
                         IpAddress = a.IpAddress
@@ -122,7 +134,6 @@ namespace TaskManagement.Infrastructure.Services
                 }
                 var logs = await _context.AuditLogs
                     .Where(a => a.GroupId == groupId)
-                    .Include(a => a.User)
                     .OrderByDescending(a => a.CreatedAt)
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
@@ -136,7 +147,8 @@ namespace TaskManagement.Infrastructure.Services
                         OldValue = a.OldValue,
                         NewValue = a.NewValue,
                         UserId = a.UserId,
-                        UserName = a.User.UserName,
+                        UserName = a.UserName,
+                        UserEmail = a.UserEmail,
                         Timestamp = a.CreatedAt,
                         Reason = a.Reason,
                         IpAddress = a.IpAddress
@@ -164,7 +176,6 @@ namespace TaskManagement.Infrastructure.Services
                 var logs = await _context.AuditLogs
                     .Where(a => a.UserId == userId &&
                                (a.GroupId == null || userGroupIds.Contains(a.GroupId.Value)))
-                    .Include(a => a.User)
                     .OrderByDescending(a => a.CreatedAt)
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
@@ -178,7 +189,8 @@ namespace TaskManagement.Infrastructure.Services
                         OldValue = a.OldValue,
                         NewValue = a.NewValue,
                         UserId = a.UserId,
-                        UserName = a.User.UserName,
+                        UserName = a.UserName,
+                        UserEmail = a.UserEmail,
                         Timestamp = a.CreatedAt,
                         Reason = a.Reason,
                         IpAddress = a.IpAddress

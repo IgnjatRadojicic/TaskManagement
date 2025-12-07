@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 
 namespace TaskManagement.Core.Enums
 {
-    public enum GroupRole
+    public enum TaskPriority
     {
-        Member = 1,
-        TeamLead = 2,
-        Manager = 3,
-        Owner = 4,
+        Low = 1,      
+        Medium = 2,   
+        High = 3,     
+        Urgent = 4    
     }
 }

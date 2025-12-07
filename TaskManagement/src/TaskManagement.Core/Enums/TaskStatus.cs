@@ -9,10 +9,9 @@ namespace TaskManagement.Core.Enums
     public enum TaskStatus
     {
 
-        NotStarted = 0,
-        InProgress = 1,
-        UnderReview = 2,
-        Completed = 3,
-        Cancelled = 4
+        NotStarted = 1,
+        InProgress = 2,
+        UnderReview = 3,
+        Completed = 4
     }
 }

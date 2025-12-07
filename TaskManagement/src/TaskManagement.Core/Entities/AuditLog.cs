@@ -16,6 +16,8 @@ namespace TaskManagement.Core.Entities
         public string? OldValue { get; set; }
         public string? NewValue { get; set; }
         public Guid UserId { get; set; }
+        public string UserName { get; set; } = string.Empty;
+        public string UserEmail { get; set; } = string.Empty;
         public Guid? GroupId { get; set; } 
         public string? Reason { get; set; }
         public string IpAddress { get; set; } = string.Empty;

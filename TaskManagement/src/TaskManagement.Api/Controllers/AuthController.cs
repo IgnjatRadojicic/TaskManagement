@@ -31,12 +31,14 @@ namespace TaskManagement.Api.Controllers
             {
                 var response = await _authService.RegisterAsync(registerDto);
 
-                await LogAuditAsync(
-                    _auditService,
+                await _auditService.LogAsync(
                     entityType: "User",
                     entityId: response.UserId,
                     action: "Registered",
-                    groupId: null);
+                    userId: response.UserId, 
+                    groupId: null,
+                    ipAddress: GetClientIpAddress(),
+                    userAgent: GetUserAgent());
 
                 return Ok(response);
             }
@@ -60,12 +62,15 @@ namespace TaskManagement.Api.Controllers
             {
                 var response = await _authService.LoginAsync(loginDto);
 
-                await LogAuditAsync(
-                    _auditService,
+              
+                await _auditService.LogAsync(
                     entityType: "User",
                     entityId: response.UserId,
                     action: "Login",
-                    groupId: null);
+                    userId: response.UserId,  
+                    groupId: null,
+                    ipAddress: GetClientIpAddress(),
+                    userAgent: GetUserAgent());
 
                 return Ok(response);
             }
@@ -79,7 +84,6 @@ namespace TaskManagement.Api.Controllers
                 return StatusCode(500, new { message = "An error occurred during login" });
             }
         }
-
         [HttpPost("refresh")]
         [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -158,12 +162,14 @@ namespace TaskManagement.Api.Controllers
             {
                 var userId = await _authService.ResetPasswordAsync(resetPasswordDto);
 
-                await LogAuditAsync(
-                    _auditService,
+                await _auditService.LogAsync(
                     entityType: "User",
                     entityId: userId,
                     action: "PasswordReset",
-                    groupId: null);
+                    userId: userId,
+                    groupId: null,
+                    ipAddress: GetClientIpAddress(),
+                    userAgent: GetUserAgent());
 
                 return Ok(new { message = "Password reset successfully" });
             }
