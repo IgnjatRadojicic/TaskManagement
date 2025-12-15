@@ -8,9 +8,9 @@ namespace TaskManagement.Core.Enums
 {
     public enum GroupRole
     {
-        Member = 1,
-        TeamLead = 2,
-        Manager = 3,
-        Owner = 4,
+        Member = 4,
+        TeamLead = 3,
+        Manager = 2,
+        Owner = 1,
     }
 }

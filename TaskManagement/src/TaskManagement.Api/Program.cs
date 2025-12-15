@@ -57,6 +57,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 
 // Infrastructure Services

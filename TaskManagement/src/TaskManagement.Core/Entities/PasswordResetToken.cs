@@ -16,7 +16,7 @@ namespace TaskManagement.Core.Entities
         public DateTime? UsedAt { get; set; }
         public string IpAddress { get; set; } = string.Empty;
         
-        public virtual User? User { get; set; } = null!;
+        public virtual User? User { get; set; } = null;
 
     }
 }

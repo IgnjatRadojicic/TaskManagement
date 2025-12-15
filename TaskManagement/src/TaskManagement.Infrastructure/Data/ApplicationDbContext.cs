@@ -131,10 +131,12 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.Entity<TaskItem>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.ToTable("Tasks");
 
             entity.HasIndex(e => e.GroupId);
             entity.HasIndex(e => e.AssignedToId);
             entity.HasIndex(e => e.StatusId);
+            entity.HasIndex(e => e.PriorityId);
             entity.HasIndex(e => e.DueDate);
 
             entity.Property(e => e.Title).HasMaxLength(200).IsRequired();
@@ -143,7 +145,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasOne(e => e.Group)
                 .WithMany(g => g.Tasks)
                 .HasForeignKey(e => e.GroupId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(e => e.AssignedTo)
                 .WithMany(u => u.AssignedTasks)
@@ -182,7 +184,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasOne(e => e.Task)
                 .WithMany(t => t.Attachments)
                 .HasForeignKey(e => e.TaskId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(e => e.Uploader)
                 .WithMany(u => u.UploadedAttachments)
@@ -323,7 +325,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
                 }
                 else if (entry.State == EntityState.Modified)
                 {
-                    selfManaged.CreatedAt = DateTime.UtcNow;
+                    selfManaged.UpdatedAt = DateTime.UtcNow;
                 }
             }
         }
