@@ -12,7 +12,7 @@ namespace TaskManagement.Core.Interfaces
 
         Task<Stream> DownloadFileAsync(string storagePath);
         Task<bool> FileExistsAsync(string storagePath);
-
+        public Task DeleteFileAsync(string storagePath);
         string GetFileUrl(string storagePath);
     }
 }
