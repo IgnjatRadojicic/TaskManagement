@@ -11,7 +11,7 @@ namespace TaskManagement.Core.Configuration
         public string Provider { get; set; } = "Local";
         public LocalStorageSettings LocalStorage { get; set; } = new();
         public AzureBlobStorageSettings AzureBlobStorage { get; set; } = new();
-        public int MaxFileSizeInMb { get; set; } = 10;
+        public int MaxFileSizeInMB { get; set; } = 10;
         public List<string> AllowedExtensions { get; set; } = new();
     }
 
