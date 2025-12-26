@@ -11,7 +11,7 @@ using TaskManagement.Core.Interfaces;
 using System.IO;
 namespace TaskManagement.Infrastructure.Services.Storage
 {
-    public class LocalFileStorageService
+    public class LocalFileStorageService : IFileStorageService
     {
         private readonly FileStorageSettings _settings;
         private readonly ILogger<LocalFileStorageService> _logger;

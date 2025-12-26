@@ -29,5 +29,6 @@ namespace TaskManagement.Core.Entities
         public virtual Group Group { get; set; } = null!;
         public virtual User? AssignedTo { get; set; }
         public virtual ICollection<TaskAttachment> Attachments { get; set; } = new List<TaskAttachment>();
+        public virtual ICollection<TaskComment> Comments { get; set; } = new List<TaskComment>();
     }
 }

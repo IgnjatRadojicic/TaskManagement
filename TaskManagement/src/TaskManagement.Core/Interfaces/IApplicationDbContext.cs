@@ -20,6 +20,7 @@ namespace TaskManagement.Core.Interfaces
         DbSet<GroupMember> GroupMembers { get; set; }
         DbSet<TaskItem> Tasks { get; set; }
         DbSet<TaskAttachment> TaskAttachments { get; set; }
+        DbSet<TaskComment> TaskComments { get; set; }
 
 
         DbSet<TaskStatusLookup> TaskStatuses { get; set; }

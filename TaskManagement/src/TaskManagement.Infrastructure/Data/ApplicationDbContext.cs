@@ -22,6 +22,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public DbSet<TaskStatusLookup> TaskStatuses { get; set; }
     public DbSet<TaskPriorityLookup> TaskPriorities { get; set; }
+    public DbSet<TaskComment> TaskComments { get; set; }
     public DbSet<GroupRoleLookup> GroupRoles { get; set; }
 
     public DbSet<AuditLog> AuditLogs { get; set; }
@@ -194,6 +195,27 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
 
         });
 
+        modelBuilder.Entity<TaskComment>(entity =>
+        {
+            entity.HasQueryFilter(tc => !tc.IsDeleted);
+
+            entity.Property(tc => tc.Content)
+                .IsRequired()
+                .HasMaxLength(2000);
+
+            entity.HasOne(tc => tc.Task)
+                .WithMany(t => t.Comments)
+                .HasForeignKey(tc => tc.TaskId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(tc => tc.User)
+                .WithMany()
+                .HasForeignKey(tc => tc.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(tc => tc.TaskId);
+            entity.HasIndex(tc => tc.UserId);
+        });
 
         modelBuilder.Entity<PasswordResetToken>(entity =>
         {
