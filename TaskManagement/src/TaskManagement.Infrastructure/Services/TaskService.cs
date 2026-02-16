@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Identity.Client;
 using TaskManagement.Core.DTO.Tasks;
 using TaskManagement.Core.Entities;
 using TaskManagement.Core.Enums;
@@ -42,17 +43,17 @@ namespace TaskManagement.Infrastructure.Services
             var priorityExists = await _context.TaskPriorities
                 .AnyAsync(p => p.Id == createTaskDto.PriorityId && p.IsActive);
 
-            if(!priorityExists)
+            if (!priorityExists)
             {
                 throw new InvalidOperationException("Invalid priority selected");
             }
 
-            if(createTaskDto.AssignedToUserId.HasValue)
+            if (createTaskDto.AssignedToUserId.HasValue)
             {
                 var assigneeIsMember = await _context.GroupMembers
                     .AnyAsync(gm => gm.GroupId == groupId && gm.UserId == createTaskDto.AssignedToUserId.Value);
 
-                if(!assigneeIsMember)
+                if (!assigneeIsMember)
                 {
                     throw new InvalidOperationException("Cannot assign task to user who is not a group member");
                 }
@@ -86,7 +87,7 @@ namespace TaskManagement.Infrastructure.Services
             var isMember = await _context.GroupMembers
                 .AnyAsync(gm => gm.GroupId == groupId && gm.UserId == userId);
 
-            if(!isMember)
+            if (!isMember)
             {
                 throw new UnauthorizedAccessException("You must be a member of this group to view its tasks");
             }
@@ -235,12 +236,12 @@ namespace TaskManagement.Infrastructure.Services
                 throw new UnauthorizedAccessException("Only the task creator or Team Leads and above can change task priority");
             }
 
-            if(!string.IsNullOrWhiteSpace(updateTaskDto.Title))
+            if (!string.IsNullOrWhiteSpace(updateTaskDto.Title))
             {
                 task.Title = updateTaskDto.Title;
             }
 
-            if(!string.IsNullOrWhiteSpace(updateTaskDto.Description))
+            if (!string.IsNullOrWhiteSpace(updateTaskDto.Description))
             {
                 task.Description = updateTaskDto.Description;
             }
@@ -273,9 +274,10 @@ namespace TaskManagement.Infrastructure.Services
             return await GetTaskByIdAsync(taskId, userId);
         }
 
-        public async Task<TaskDto> ChangeTaskStatusAsync(Guid taskId, ChangeTaskStatusDto statusDto, Guid userId)
+        public async Task<TaskStatusChangeResult> ChangeTaskStatusAsync(Guid taskId, ChangeTaskStatusDto statusDto, Guid userId)
         {
             var task = await _context.Tasks
+                .Include(t => t.Status)
                 .Include(t => t.Group)
                 .FirstOrDefaultAsync(t => t.Id == taskId);
 
@@ -300,6 +302,8 @@ namespace TaskManagement.Infrastructure.Services
                 throw new UnauthorizedAccessException("You don't have permission to change this task's status");
             }
 
+            var oldStatus = task.Status.DisplayName;
+
             var statusExists = await _context.TaskStatuses
                 .AnyAsync(s => s.Id == statusDto.NewStatusId && s.IsActive);
 
@@ -308,9 +312,12 @@ namespace TaskManagement.Infrastructure.Services
                 throw new InvalidOperationException("Invalid status selected");
             }
 
+            var newStatus = await _context.TaskStatuses
+                .FirstOrDefaultAsync(s => s.Id == statusDto.NewStatusId);
+
             task.StatusId = statusDto.NewStatusId;
 
-            if (statusDto.NewStatusId == 4) 
+            if (statusDto.NewStatusId == 4)
             {
                 task.CompletedAt = DateTime.UtcNow;
             }
@@ -327,12 +334,20 @@ namespace TaskManagement.Infrastructure.Services
             _logger.LogInformation("Task {TaskId} status changed to {StatusId} by user {UserId}",
                 taskId, statusDto.NewStatusId, userId);
 
-            return await GetTaskByIdAsync(taskId, userId);
+            var taskDto = await GetTaskByIdAsync(taskId, userId);
+
+            return new TaskStatusChangeResult
+            {
+                Task = taskDto,
+                OldStatus = oldStatus,
+                NewStatus = newStatus.DisplayName
+            };
         }
 
-        public async Task<TaskDto> ChangeTaskPriorityAsync(Guid taskId, int newPriorityId, Guid userId)
+        public async Task<TaskPriorityChangeResult> ChangeTaskPriorityAsync(Guid taskId, int newPriorityId, Guid userId)
         {
             var task = await _context.Tasks
+                .Include(t => t.Priority)
                 .Include(t => t.Group)
                 .FirstOrDefaultAsync(t => t.Id == taskId);
 
@@ -355,6 +370,8 @@ namespace TaskManagement.Infrastructure.Services
                 throw new UnauthorizedAccessException("Only Team Leads and above can change task priority");
             }
 
+            var oldPriority = task.Priority.Name;
+
             var priorityExists = await _context.TaskPriorities
                 .AnyAsync(p => p.Id == newPriorityId && p.IsActive);
 
@@ -362,6 +379,9 @@ namespace TaskManagement.Infrastructure.Services
             {
                 throw new InvalidOperationException("Invalid priority selected");
             }
+
+            var newPriority = await _context.TaskPriorities
+                .FirstOrDefaultAsync(p => p.Id == newPriorityId);
 
             task.PriorityId = newPriorityId;
             task.UpdatedBy = userId;
@@ -372,7 +392,14 @@ namespace TaskManagement.Infrastructure.Services
             _logger.LogInformation("Task {TaskId} priority changed to {PriorityId} by user {UserId}",
                 taskId, newPriorityId, userId);
 
-            return await GetTaskByIdAsync(taskId, userId);
+            var taskDto = await GetTaskByIdAsync(taskId, userId);
+
+            return new TaskPriorityChangeResult
+            {
+                Task = taskDto,
+                OldPriority = oldPriority,
+                NewPriority = newPriority.Name
+            };
         }
 
         public async Task AssignTaskAsync(Guid taskId, AssignTaskDto assignDto, Guid userId)
@@ -491,6 +518,32 @@ namespace TaskManagement.Infrastructure.Services
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Task {TaskId} deleted by user {UserId}", taskId, userId);
+        }
+
+
+        public async Task<List<Guid>> GetTaskGroupMembersAsync(Guid taskId, Guid userId)
+        {
+            var task = await _context.Tasks
+                .Include(t => t.Group)
+                .FirstOrDefaultAsync(t => t.Id == taskId);
+
+            if (task == null)
+            {
+                throw new KeyNotFoundException("Task not found");
+            }
+
+            var isMember = await _context.GroupMembers
+                .AnyAsync(gm => gm.GroupId == task.GroupId && gm.UserId == userId);
+
+            if (!isMember)
+            {
+                throw new UnauthorizedAccessException("You must be a member of this group");
+            }
+
+            return await _context.GroupMembers
+            .Where(gm => gm.GroupId == task.GroupId)
+            .Select(gm => gm.UserId)
+            .ToListAsync();
         }
     }
 }

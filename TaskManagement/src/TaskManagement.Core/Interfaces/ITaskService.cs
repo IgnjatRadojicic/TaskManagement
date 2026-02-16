@@ -13,10 +13,12 @@ namespace TaskManagement.Core.Interfaces
         Task<List<TaskDto>> GetGroupTasksAsync(Guid groupId, TaskFilterDto? filter, Guid userId);
         Task<TaskDto> GetTaskByIdAsync(Guid taskId, Guid userId);
         Task<TaskDto> UpdateTaskAsync(Guid taskId, UpdateTaskDto updateTaskDto, Guid userId);
-        Task<TaskDto> ChangeTaskStatusAsync(Guid taskId, ChangeTaskStatusDto statusDto, Guid userId);
-        Task<TaskDto> ChangeTaskPriorityAsync(Guid taskId, int newPriorityId, Guid userId);
+        Task<TaskStatusChangeResult> ChangeTaskStatusAsync(Guid taskId, ChangeTaskStatusDto statusDto, Guid userId);
+        Task<TaskPriorityChangeResult> ChangeTaskPriorityAsync(Guid taskId, int newPriorityId, Guid userId);
         Task AssignTaskAsync(Guid taskId, AssignTaskDto assignDto, Guid userId);
         Task UnassignTaskAsync(Guid taskId, Guid userId);
         Task DeleteTaskAsync(Guid taskId, Guid userId);
+
+        Task<List<Guid>> GetTaskGroupMembersAsync(Guid taskId, Guid userId);
     }
 }

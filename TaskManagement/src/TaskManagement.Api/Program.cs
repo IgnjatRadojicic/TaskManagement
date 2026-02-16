@@ -4,6 +4,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using StackExchange.Redis;
 using System.Text;
+using TaskManagement.Api.Interfaces;
+using TaskManagement.Api.Services;
 using TaskManagement.Core.Common;
 using TaskManagement.Core.Configuration;
 using TaskManagement.Core.Interfaces;
@@ -23,7 +25,11 @@ builder.Services.AddScoped<IApplicationDbContext>(provider =>
     provider.GetRequiredService<ApplicationDbContext>());
 
 // Redis
-var redisConnection = builder.Configuration["Redis:ConnectionString"]!;
+var redisConnection = builder.Configuration.GetConnectionString("RedisConnection");
+if (string.IsNullOrEmpty(redisConnection))
+{
+    throw new InvalidOperationException("Redis connection string not found!");
+}
 builder.Services.AddSingleton<IConnectionMultiplexer>(
     ConnectionMultiplexer.Connect(redisConnection));
 builder.Services.AddScoped<IRedisService, RedisService>();
@@ -67,7 +73,7 @@ builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
-
+builder.Services.AddScoped<INotificationBroadcaster, SignalRNotificationBroadcaster>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.Configure<FileStorageSettings>(
     builder.Configuration.GetSection("FileStorage"));

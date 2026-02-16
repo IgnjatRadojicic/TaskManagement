@@ -25,6 +25,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<TaskComment> TaskComments { get; set; }
     public DbSet<GroupRoleLookup> GroupRoles { get; set; }
 
+    public DbSet<Notification> Notifications { get; set; }
     public DbSet<AuditLog> AuditLogs { get; set; }
     public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
@@ -318,6 +319,31 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
                 .IsRequired(false);  
         });
 
+        
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasQueryFilter(n => !n.IsDeleted);
+
+            entity.Property(n => n.Title)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(n => n.Message)
+                .IsRequired()
+                .HasMaxLength(1000);
+
+            entity.Property(n => n.RelatedEntityType)
+                .HasMaxLength(50);
+
+            entity.HasOne(n => n.User)
+                .WithMany()
+                .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(n => n.UserId);
+            entity.HasIndex(n => n.IsRead);
+            entity.HasIndex(n => n.CreatedAt);
+        });
     }
 
 

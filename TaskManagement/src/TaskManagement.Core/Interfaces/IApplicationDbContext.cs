@@ -26,7 +26,7 @@ namespace TaskManagement.Core.Interfaces
         DbSet<TaskStatusLookup> TaskStatuses { get; set; }
         DbSet<TaskPriorityLookup> TaskPriorities { get; set; }
         DbSet<GroupRoleLookup> GroupRoles { get; set; }
-
+        DbSet<Notification> Notifications { get; set; }
         DbSet<AuditLog> AuditLogs { get; set; }
         DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 

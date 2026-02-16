@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TaskManagement.Api.Interfaces;
 using TaskManagement.Core.DTO.Tasks;
 using TaskManagement.Core.Interfaces;
 namespace TaskManagement.Api.Controllers
@@ -12,13 +13,19 @@ namespace TaskManagement.Api.Controllers
         private readonly ITaskService _taskService;
         private readonly IAuditService _auditService;
         private readonly ILogger<TaskController> _logger;
+        private readonly INotificationService _notificationService;
+        private readonly INotificationBroadcaster _notificationBroadcaster;
 
         public TaskController(
             ITaskService taskService,
             IAuditService auditService,
+            INotificationBroadcaster notificationBroadcaster,
+            INotificationService notificationService,
             ILogger<TaskController> logger)
         {
             _taskService = taskService;
+            _notificationBroadcaster = notificationBroadcaster;
+            _notificationService = notificationService;
             _auditService = auditService;
             _logger = logger;
         }
@@ -280,6 +287,19 @@ namespace TaskManagement.Api.Controllers
                     groupId: task.GroupId,
                     propertyName: "AssignedTo",
                     newValue: task.AssignedToUserName);
+
+                await _notificationService.NotifyTaskAssignedAsync(assignDto.UserId, task);
+
+                var notifications = await _notificationService.GetUserNotificationsAsync(
+                    assignDto.UserId,
+                    unreadOnly: true);
+
+                var notification = notifications.FirstOrDefault();
+
+                if (notification != null)
+                {
+                    await _notificationBroadcaster.BroadcastNotificationAsync(notification);
+                }
 
                 return Ok(new { message = "Task assigned successfully" });
             }
