@@ -56,29 +56,14 @@ public class CommentsController : BaseApiController
 
             var task = await _taskService.GetTaskByIdAsync(taskId, userId);
 
-            await _notificationService.NotifyTaskCommentAddedAsync(task.GroupId, task, comment);
+            var notifications = await _notificationService.NotifyTaskCommentAddedAsync(
+                task.GroupId,
+                task,
+                comment);
 
-            var usersToNotify = new List<Guid>();
-            if (task.CreatedBy != comment.UserId)
+            foreach (var notification in notifications)
             {
-                usersToNotify.Add(task.CreatedBy);
-            }
-            if (task.AssignedToId.HasValue && task.AssignedToId.Value != comment.UserId)
-            {
-                usersToNotify.Add(task.AssignedToId.Value);
-            }
-
-            foreach (var userToNotify in usersToNotify.Distinct())
-            {
-                var notifications = await _notificationService.GetUserNotificationsAsync(
-                    userToNotify,
-                    unreadOnly: true);
-                var notification = notifications.FirstOrDefault();
-
-                if (notification != null)
-                {
-                    await _notificationBroadcaster.BroadcastNotificationAsync(notification);
-                }
+                await _notificationBroadcaster.BroadcastNotificationAsync(notification);
             }
 
             return CreatedAtAction(nameof(GetTaskComments), new { taskId }, comment);

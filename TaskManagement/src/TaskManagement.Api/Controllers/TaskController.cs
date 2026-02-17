@@ -212,13 +212,13 @@ namespace TaskManagement.Api.Controllers
                     oldValue: task.OldStatus,
                     newValue: task.NewStatus);
 
-                var notification = await _notificationService.NotifyTaskStatusChangedAsync(
+                var notifications = await _notificationService.NotifyTaskStatusChangedAsync(
                     task.Task.GroupId,
                     task.Task,
                     task.OldStatus,
                     task.NewStatus);
 
-                if (notification != null)
+                foreach (var notification in notifications)
                 {
                     await _notificationBroadcaster.BroadcastNotificationAsync(notification);
                 }

@@ -49,7 +49,7 @@ public class NotificationsController : BaseApiController
 
 
     [HttpGet("unread-count")]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(UnreadCountDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUnreadCount()
     {
         try
@@ -57,7 +57,7 @@ public class NotificationsController : BaseApiController
             var userId = GetUserId();
             var count = await _notificationService.GetUnreadCountAsync(userId);
 
-            return Ok(new { count });
+            return Ok(new { Count = count });
         }
         catch (Exception ex)
         {
