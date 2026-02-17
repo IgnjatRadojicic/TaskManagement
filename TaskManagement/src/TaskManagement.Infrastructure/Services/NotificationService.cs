@@ -22,7 +22,7 @@ public class NotificationService : INotificationService
         _logger = logger;
     }
 
-    public async Task NotifyTaskAssignedAsync(Guid userId, TaskDto task)
+    public async Task<NotificationDto> NotifyTaskAssignedAsync(Guid userId, TaskDto task)
     {
         var notification = new Notification
         {
@@ -35,15 +35,17 @@ public class NotificationService : INotificationService
             CreatedAt = DateTime.UtcNow
         };
 
-        await CreateNotificationAsync(notification);
+        return await CreateNotificationAsync(notification);
     }
 
-    public async Task NotifyTaskStatusChangedAsync(Guid groupId, TaskDto task, string oldStatus, string newStatus)
+    public async Task<List<NotificationDto>> NotifyTaskStatusChangedAsync(Guid groupId, TaskDto task, string oldStatus, string newStatus)
     {
         var members = await _context.GroupMembers
             .Where(gm => gm.GroupId == groupId && gm.UserId != task.CreatedBy)
             .Select(gm => gm.UserId)
             .ToListAsync();
+
+        var createdNotifications = new List<NotificationDto>();
 
         foreach (var memberId in members)
         {
@@ -58,11 +60,14 @@ public class NotificationService : INotificationService
                 CreatedAt = DateTime.UtcNow
             };
 
-            await CreateNotificationAsync(notification);
+            var dto = await CreateNotificationAsync(notification);
+            createdNotifications.Add(dto);
         }
+
+        return createdNotifications;
     }
 
-    public async Task NotifyTaskCommentAddedAsync(Guid groupId, TaskDto task, CommentDto comment)
+    public async Task<List<NotificationDto>> NotifyTaskCommentAddedAsync(Guid groupId, TaskDto task, CommentDto comment)
     {
         var usersToNotify = new List<Guid>();
 
@@ -71,12 +76,14 @@ public class NotificationService : INotificationService
             usersToNotify.Add(task.CreatedBy);
         }
 
-        if (task.AssignedToId.HasValue && task.AssignedToId.Value != comment.UserId)
+        if (task.AssignedToId.HasValue
+            && task.AssignedToId.Value != comment.UserId
+            && task.AssignedToId.Value != task.CreatedBy)
         {
             usersToNotify.Add(task.AssignedToId.Value);
         }
 
-        usersToNotify = usersToNotify.Distinct().ToList();
+        var createdNotifications = new List<NotificationDto>();
 
         foreach (var userId in usersToNotify)
         {
@@ -91,46 +98,68 @@ public class NotificationService : INotificationService
                 CreatedAt = DateTime.UtcNow
             };
 
-            await CreateNotificationAsync(notification);
+            var dto = await CreateNotificationAsync(notification);
+            createdNotifications.Add(dto);
         }
+
+        return createdNotifications;
     }
 
-    public async Task NotifyTaskPriorityChangedAsync(Guid groupId, TaskDto task, string oldPriority, string newPriority)
+    public async Task<NotificationDto?> NotifyTaskPriorityChangedAsync(Guid groupId, TaskDto task, string oldPriority, string newPriority)
     {
-        if (task.AssignedToId.HasValue)
+        if (!task.AssignedToId.HasValue)
         {
-            var notification = new Notification
-            {
-                UserId = task.AssignedToId.Value,
-                Type = NotificationType.TaskPriorityChanged,
-                Title = "Task Priority Changed",
-                Message = $"Task '{task.Title}' priority changed from {oldPriority} to {newPriority}",
-                RelatedEntityId = task.Id,
-                RelatedEntityType = "Task",
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await CreateNotificationAsync(notification);
+            return null;
         }
+
+        var notification = new Notification
+        {
+            UserId = task.AssignedToId.Value,
+            Type = NotificationType.TaskPriorityChanged,
+            Title = "Task Priority Changed",
+            Message = $"Task '{task.Title}' priority changed from {oldPriority} to {newPriority}",
+            RelatedEntityId = task.Id,
+            RelatedEntityType = "Task",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        return await CreateNotificationAsync(notification);
     }
 
-    public async Task NotifyTaskUpdatedAsync(Guid groupId, TaskDto task)
+    public async Task<NotificationDto?> NotifyTaskUpdatedAsync(Guid groupId, TaskDto task)
     {
-        if (task.AssignedToId.HasValue && task.AssignedToId.Value != task.CreatedBy)
+        if (!task.AssignedToId.HasValue || task.AssignedToId.Value == task.CreatedBy)
         {
-            var notification = new Notification
-            {
-                UserId = task.AssignedToId.Value,
-                Type = NotificationType.TaskUpdated,
-                Title = "Task Updated",
-                Message = $"Task '{task.Title}' has been updated",
-                RelatedEntityId = task.Id,
-                RelatedEntityType = "Task",
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await CreateNotificationAsync(notification);
+            return null;
         }
+
+        var notification = new Notification
+        {
+            UserId = task.AssignedToId.Value,
+            Type = NotificationType.TaskUpdated,
+            Title = "Task Updated",
+            Message = $"Task '{task.Title}' has been updated",
+            RelatedEntityId = task.Id,
+            RelatedEntityType = "Task",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        return await CreateNotificationAsync(notification);
+    }
+
+    public async Task<NotificationDto> NotifyGroupInvitationAsync(Guid userId, string groupName)
+    {
+        var notification = new Notification
+        {
+            UserId = userId,
+            Type = NotificationType.GroupInvitation,
+            Title = "Group Joined",
+            Message = $"You have joined the group: {groupName}",
+            RelatedEntityType = "Group",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        return await CreateNotificationAsync(notification);
     }
 
     public async Task<List<NotificationDto>> GetUserNotificationsAsync(Guid userId, bool unreadOnly = false)
@@ -143,7 +172,7 @@ public class NotificationService : INotificationService
             query = query.Where(n => !n.IsRead);
         }
 
-        var notifications = await query
+        return await query
             .OrderByDescending(n => n.CreatedAt)
             .Select(n => new NotificationDto
             {
@@ -161,8 +190,6 @@ public class NotificationService : INotificationService
             })
             .Take(50)
             .ToListAsync();
-
-        return notifications;
     }
 
     public async Task<int> GetUnreadCountAsync(Guid userId)
@@ -230,12 +257,27 @@ public class NotificationService : INotificationService
             notificationId, userId);
     }
 
-    private async Task CreateNotificationAsync(Notification notification)
+    private async Task<NotificationDto> CreateNotificationAsync(Notification notification)
     {
         _context.Notifications.Add(notification);
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("Notification created for user {UserId}: {Title}",
             notification.UserId, notification.Title);
+
+        return new NotificationDto
+        {
+            Id = notification.Id,
+            UserId = notification.UserId,
+            Type = notification.Type,
+            TypeName = notification.Type.ToString(),
+            Title = notification.Title,
+            Message = notification.Message,
+            RelatedEntityId = notification.RelatedEntityId,
+            RelatedEntityType = notification.RelatedEntityType,
+            IsRead = notification.IsRead,
+            ReadAt = notification.ReadAt,
+            CreatedAt = notification.CreatedAt
+        };
     }
 }

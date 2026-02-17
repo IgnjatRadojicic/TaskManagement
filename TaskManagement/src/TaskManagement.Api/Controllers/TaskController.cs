@@ -162,20 +162,11 @@ namespace TaskManagement.Api.Controllers
                     action: "Updated",
                     groupId: task.GroupId);
 
-                if (task.AssignedToId.HasValue && task.AssignedToId.Value != userId)
+                var notification = await _notificationService.NotifyTaskUpdatedAsync(task.GroupId, task);
+
+                if (notification != null)
                 {
-                    await _notificationService.NotifyTaskUpdatedAsync(task.GroupId, task);
-
-                    
-                    var notifications = await _notificationService.GetUserNotificationsAsync(
-                        task.AssignedToId.Value,
-                        unreadOnly: true);
-                    var notification = notifications.FirstOrDefault();
-
-                    if (notification != null)
-                    {
-                        await _notificationBroadcaster.BroadcastNotificationAsync(notification);
-                    }
+                    await _notificationBroadcaster.BroadcastNotificationAsync(notification);
                 }
 
 
@@ -221,13 +212,11 @@ namespace TaskManagement.Api.Controllers
                     oldValue: task.OldStatus,
                     newValue: task.NewStatus);
 
-
-                await _notificationService.NotifyTaskStatusChangedAsync(
+                var notification = await _notificationService.NotifyTaskStatusChangedAsync(
                     task.Task.GroupId,
                     task.Task,
                     task.OldStatus,
                     task.NewStatus);
-
 
                 if (notification != null)
                 {
@@ -279,17 +268,11 @@ namespace TaskManagement.Api.Controllers
 
                 if (task.Task.AssignedToId.HasValue)
                 {
-                    await _notificationService.NotifyTaskPriorityChangedAsync(
+                    var notification = await _notificationService.NotifyTaskPriorityChangedAsync(
                         task.Task.GroupId,
                         task.Task,
                         task.OldPriority,
                         task.NewPriority);
-
-                   
-                    var notifications = await _notificationService.GetUserNotificationsAsync(
-                        task.Task.AssignedToId.Value,
-                        unreadOnly: true);
-                    var notification = notifications.FirstOrDefault();
 
                     if (notification != null)
                     {

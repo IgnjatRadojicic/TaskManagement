@@ -1,8 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 using TaskManagement.Api.Hubs;
 using TaskManagement.Core.DTO.Notifications;
+using TaskManagement.Core.Entities;
 using TaskManagement.Core.Interfaces;
 
 namespace TaskManagement.Api.Controllers;
@@ -40,14 +42,14 @@ public class NotificationsController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting notifications");
+            _logger.LogError(ex, "Error getting notifications for user");
             return StatusCode(500, new { message = "An error occurred while retrieving notifications" });
         }
     }
 
 
     [HttpGet("unread-count")]
-    [ProducesResponseType(typeof(int), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUnreadCount()
     {
         try
@@ -63,6 +65,7 @@ public class NotificationsController : BaseApiController
             return StatusCode(500, new { message = "An error occurred while retrieving unread count" });
         }
     }
+
 
     [HttpPut("{notificationId}/read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -82,10 +85,11 @@ public class NotificationsController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error marking notification as read");
+            _logger.LogError(ex, "Error marking notification {NotificationId} as read", notificationId);
             return StatusCode(500, new { message = "An error occurred" });
         }
     }
+
 
     [HttpPut("read-all")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -124,7 +128,7 @@ public class NotificationsController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting notification");
+            _logger.LogError(ex, "Error deleting notification {NotificationId}", notificationId);
             return StatusCode(500, new { message = "An error occurred" });
         }
     }
