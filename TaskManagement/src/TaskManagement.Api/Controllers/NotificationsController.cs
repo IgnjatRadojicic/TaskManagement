@@ -57,7 +57,7 @@ public class NotificationsController : BaseApiController
             var userId = GetUserId();
             var count = await _notificationService.GetUnreadCountAsync(userId);
 
-            return Ok(new { Count = count });
+            return Ok(new UnreadCountDto { Count = count });
         }
         catch (Exception ex)
         {

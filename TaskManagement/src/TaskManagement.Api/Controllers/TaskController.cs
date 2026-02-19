@@ -52,6 +52,14 @@ namespace TaskManagement.Api.Controllers
                     action: "Created",
                     groupId: groupId);
 
+
+                var notification = await _notificationService.NotifyTaskCreatedAsync(task.AssignedToId.Value, task);
+
+                if (notification != null)
+                {
+                    await _notificationBroadcaster.BroadcastNotificationAsync(notification);
+                }
+
                 return CreatedAtAction(
                     nameof(GetTaskById),
                     new { taskId = task.Id },
@@ -302,18 +310,21 @@ namespace TaskManagement.Api.Controllers
         }
 
         [HttpPost("{taskId}/assign")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> AssignTask(Guid taskId, [FromBody] AssignTaskDto assignDto)
         {
             try
             {
                 var userId = GetUserId();
-                await _taskService.AssignTaskAsync(taskId, assignDto, userId);
 
+                _logger.LogInformation("=== ASSIGN TASK ===");
+                _logger.LogInformation("TaskId: {TaskId}", taskId);
+                _logger.LogInformation("AssignToUserId: {UserId}", assignDto.UserId);
+
+                await _taskService.AssignTaskAsync(taskId, assignDto, userId);
                 var task = await _taskService.GetTaskByIdAsync(taskId, userId);
+
+                _logger.LogInformation("Task retrieved: {Title}", task.Title);
+                _logger.LogInformation("Calling NotifyTaskAssignedAsync...");
 
                 await LogAuditAsync(
                     _auditService,
@@ -326,25 +337,19 @@ namespace TaskManagement.Api.Controllers
 
                 var notification = await _notificationService.NotifyTaskAssignedAsync(assignDto.UserId, task);
 
-                if(notification != null)
+                _logger.LogInformation("NotifyTaskAssignedAsync returned: {NotificationId}", notification?.Id);
+
+                if (notification != null)
                 {
                     await _notificationBroadcaster.BroadcastNotificationAsync(notification);
+                    _logger.LogInformation("Broadcast complete");
                 }
 
                 return Ok(new { message = "Task assigned successfully" });
             }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
+            catch (UnauthorizedAccessException ex) { return Unauthorized(new { message = ex.Message }); }
+            catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+            catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error assigning task {TaskId}", taskId);

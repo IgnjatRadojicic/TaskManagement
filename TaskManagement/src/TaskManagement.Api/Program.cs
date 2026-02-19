@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using StackExchange.Redis;
 using System.Text;
+using TaskManagement.Api.Hubs;
 using TaskManagement.Api.Interfaces;
 using TaskManagement.Api.Services;
 using TaskManagement.Core.Common;
@@ -33,11 +34,11 @@ if (string.IsNullOrEmpty(redisConnection))
 builder.Services.AddSingleton<IConnectionMultiplexer>(
     ConnectionMultiplexer.Connect(redisConnection));
 builder.Services.AddScoped<IRedisService, RedisService>();
-builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 // JWT Authentication
-var jwtKey = builder.Configuration["Jwt:Secret"]!;
-var jwtIssuer = builder.Configuration["Jwt:Issuer"]!;
-var jwtAudience = builder.Configuration["Jwt:Audience"]!;
+var jwtKey = builder.Configuration["JwtSettings:Secret"]!;
+var jwtIssuer = builder.Configuration["JwtSettings:Issuer"]!;
+var jwtAudience = builder.Configuration["JwtSettings:Audience"]!;
 
 
 builder.Services.Configure<FileStorageSettings>(
@@ -73,6 +74,8 @@ builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
+builder.Services.AddSignalR();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationBroadcaster, SignalRNotificationBroadcaster>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.Configure<FileStorageSettings>(
@@ -158,7 +161,7 @@ app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
-
+app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapControllers();
 
 app.Run();
