@@ -15,6 +15,8 @@ using TaskManagement.Infrastructure.Services;
 using Hangfire;
 using Hangfire.PostgreSql;
 using TaskManagement.Infrastructure.Services.Storage;
+using TaskManagement.Api.Filters;
+using System.Net.WebSockets;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -78,6 +80,8 @@ builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationBroadcaster, SignalRNotificationBroadcaster>();
+builder.Services.AddScoped<IBackgroundJobService, BackgroundJobService>();
+builder.Services.AddScoped<NotificationBackgroundJob>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.Configure<FileStorageSettings>(
     builder.Configuration.GetSection("FileStorage"));
@@ -187,8 +191,6 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapControllers();
 
-app.Run();
-
 
 app.UseHttpsRedirection();
 
@@ -198,5 +200,12 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapControllers();
+
+// Hangfire Jobs
+using (var scope = app.Services.CreateScope())
+{
+    var backgroundJobsService = scope.ServiceProvider.GetRequiredService<IBackgroundJobService>();
+    backgroundJobsService.SetupRecurringJobs();
+}
 
 app.Run();

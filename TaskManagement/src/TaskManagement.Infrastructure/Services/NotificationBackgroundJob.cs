@@ -1,0 +1,178 @@
+﻿using Hangfire;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using TaskManagement.Core.Entities;
+using TaskManagement.Core.Enums;
+using TaskManagement.Core.Interfaces;
+
+namespace TaskManagement.Infrastructure.Services
+{
+    public class NotificationBackgroundJob
+    {
+        private readonly IApplicationDbContext _context;
+        private readonly ILogger<NotificationBackgroundJob> _logger;
+
+        public NotificationBackgroundJob(IApplicationDbContext context,
+            ILogger<NotificationBackgroundJob> logger)
+        {
+            _context = context;
+            _logger = logger;
+        }
+
+        [AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 60, 300, 3600 })]
+        public async Task SendTaskDueSoonNotification(Guid taskId)
+        {
+            _logger.LogInformation("Processing due soon notification for task {TaskId}", taskId);
+
+            var task = await _context.Tasks
+                .Include(t => t.AssignedTo)
+                .Include(t => t.Status)
+                .FirstOrDefaultAsync(t => t.Id == taskId && !t.IsDeleted);
+
+            if (task == null)
+            {
+                _logger.LogWarning("Task {TaskId} not found for due soon notification", taskId);
+                return;
+            }
+
+            if (task.StatusId == 4)
+            {
+                _logger.LogInformation("Task {TaskId} is already completed, skipping notification", taskId);
+                return;
+            }
+
+            if (!task.AssignedToId.HasValue)
+            {
+                _logger.LogInformation("Task {TaskId} has no assignee, skipping notification", taskId);
+                return;
+            }
+
+            var existingNotification = await _context.Notifications
+                .Where(n => n.RelatedEntityId == task.Id
+                && n.Type == NotificationType.TaskDueSoon
+                && !n.IsDeleted)
+                .AnyAsync();
+
+            if (existingNotification)
+            {
+                _logger.LogInformation("Due soon notification already exists for task {TaskId}", taskId);
+                return;
+            }
+
+
+            var notification = new Notification
+            {
+                UserId = task.AssignedToId.Value,
+                Type = NotificationType.TaskDueSoon,
+                Title = "Task Due Soon",
+                Message = $"Task '{task.Title}' is due in 24 hours",
+                RelatedEntityId = task.Id,
+                RelatedEntityType = "Task",
+                CreatedBy = task.AssignedToId.Value
+            };
+
+            _context.Notifications.Add(notification);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Due soon notification created for task {TaskId}", taskId);
+        }
+
+
+        [AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 60, 300, 3600 })]
+        public async Task CheckOverdueTasksAndNotify()
+        {
+            _logger.LogInformation("Starting overdue tasks check");
+
+            var now = DateTime.UtcNow;
+
+            var overdueTasks = await _context.Tasks
+                .Include(t => t.AssignedTo)
+                .Where(t => !t.IsDeleted
+                 && t.StatusId != 4
+                 && t.DueDate.HasValue
+                 && t.DueDate.Value < now
+                 && t.AssignedToId != null)
+                .ToListAsync();
+            _logger.LogInformation("Found {Count} overdue tasks", overdueTasks.Count);
+
+            var notificationsCreated = 0;
+
+            foreach (var task in overdueTasks)
+            {
+                var existingNotificationToday = await _context.Notifications
+                    .Where(n => n.RelatedEntityId == task.Id
+                    && n.Type == NotificationType.TaskOverdue
+                    && n.CreatedAt >= now.Date
+                    && !n.IsDeleted)
+                    .AnyAsync();
+
+                if (existingNotificationToday)
+                {
+                    _logger.LogDebug("Overdue notification already sent today for task {TaskId}", task.Id);
+                    continue;
+                }
+
+                var daysSinceOverdue = (now - task.DueDate!.Value).Days;
+
+                var notification = new Notification
+                {
+                    UserId = task.AssignedToId!.Value,
+                    Type = NotificationType.TaskOverdue,
+                    Title = "Task Overdue",
+                    Message = daysSinceOverdue == 0
+                     ? $"Task '{task.Title}' is overdue"
+                     : $"Task '{task.Title}' is overdue by {daysSinceOverdue} day(s)",
+                    RelatedEntityId = task.Id,
+                    RelatedEntityType = "Task",
+                    CreatedBy = task.AssignedToId.Value
+                };
+
+                _context.Notifications.Add(notification);
+                notificationsCreated++;
+            }
+
+            if (notificationsCreated > 0)
+            {
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Created {Count} overdue notifications", notificationsCreated);
+            }
+            else
+            {
+                _logger.LogInformation("No new overdue notifications needed");
+            }
+        }
+
+
+        [AutomaticRetry(Attempts = 2)]
+        public async Task CleanupOldNotifications()
+        {
+            _logger.LogInformation("Starting notification cleanup");
+
+            int daysofreadnotfications = 30;
+
+            var cutoffDate = DateTime.UtcNow.AddDays(-daysofreadnotfications); 
+
+            var oldNotifications = await _context.Notifications
+                .Where(n => n.IsRead
+                    && n.ReadAt.HasValue
+                    && n.ReadAt.Value < cutoffDate
+                    && !n.IsDeleted)
+                .ToListAsync();
+
+            _logger.LogInformation("Found {Count} old notifications to soft delete", oldNotifications.Count);
+
+            foreach (var notification in oldNotifications)
+            {
+                notification.IsDeleted = true;
+                notification.DeletedAt = DateTime.UtcNow;
+            }
+
+            if (oldNotifications.Count > 0)
+            {
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Soft deleted {Count} old notifications", oldNotifications.Count);
+            }
+        }
+    }
+}
+

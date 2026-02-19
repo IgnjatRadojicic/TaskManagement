@@ -12,18 +12,23 @@ namespace TaskManagement.Infrastructure.Services
     {
         private readonly IApplicationDbContext _context;
         private readonly ILogger<TaskService> _logger;
+        private readonly IBackgroundJobService _backgroundJobService;
 
         public TaskService(
             IApplicationDbContext context,
-            ILogger<TaskService> logger)
+            ILogger<TaskService> logger,
+            IBackgroundJobService backgroundJobService)
         {
             _context = context;
             _logger = logger;
+            _backgroundJobService = backgroundJobService;
         }
 
         public async Task<TaskDto> CreateTaskAsync(Guid groupId, CreateTaskDto createTaskDto, Guid userId)
         {
             _logger.LogInformation("User {UserId} creating task in group {GroupId}", userId, groupId);
+
+
 
             var membership = await _context.GroupMembers
                 .Include(gm => gm.Role)
@@ -70,6 +75,11 @@ namespace TaskManagement.Infrastructure.Services
                 CreatedBy = userId,
                 CreatedAt = DateTime.UtcNow
             };
+
+            if (task.DueDate.HasValue && task.AssignedToId.HasValue)
+            {
+                _backgroundJobService.ScheduleTaskDueSoonNotification(task.Id, task.DueDate.Value);
+            }
 
             _context.Tasks.Add(task);
             await _context.SaveChangesAsync();
@@ -219,6 +229,11 @@ namespace TaskManagement.Infrastructure.Services
             if (task == null)
             {
                 throw new KeyNotFoundException("Task not found");
+            }
+
+            if (task.DueDate.HasValue && task.AssignedToId.HasValue)
+            {
+                _backgroundJobService.ScheduleTaskDueSoonNotification(task.Id, task.DueDate.Value);
             }
 
             var membership = await _context.GroupMembers
@@ -410,6 +425,11 @@ namespace TaskManagement.Infrastructure.Services
             if (task == null)
             {
                 throw new KeyNotFoundException("Task not found");
+            }
+
+            if (task.DueDate.HasValue)
+            {
+                _backgroundJobService.ScheduleTaskDueSoonNotification(task.Id, task.DueDate.Value);
             }
 
             var membership = await _context.GroupMembers
