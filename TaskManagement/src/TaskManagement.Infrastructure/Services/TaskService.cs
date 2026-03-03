@@ -79,13 +79,15 @@ namespace TaskManagement.Infrastructure.Services
                 CreatedAt = DateTime.UtcNow
             };
 
+
+
+            _context.Tasks.Add(task);
+            await _context.SaveChangesAsync();
+
             if (task.DueDate.HasValue && task.AssignedToId.HasValue)
             {
                 _backgroundJobService.ScheduleTaskDueSoonNotification(task.Id, task.AssignedToId.Value, task.DueDate.Value);
             }
-
-            _context.Tasks.Add(task);
-            await _context.SaveChangesAsync();
 
             _logger.LogInformation("Task {TaskId} created in group {GroupId} by user {UserId}",
                 task.Id, groupId, userId);
@@ -234,10 +236,6 @@ namespace TaskManagement.Infrastructure.Services
                 throw new KeyNotFoundException("Task not found");
             }
 
-            if (task.DueDate.HasValue && task.AssignedToId.HasValue)
-            {
-                _backgroundJobService.ScheduleTaskDueSoonNotification(task.Id, task.AssignedToId.Value, task.DueDate.Value);
-            }
 
             var membership = await _context.GroupMembers
                 .Include(gm => gm.Role)
@@ -285,6 +283,11 @@ namespace TaskManagement.Infrastructure.Services
             task.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            if (task.DueDate.HasValue && task.AssignedToId.HasValue)
+            {
+                _backgroundJobService.ScheduleTaskDueSoonNotification(task.Id, task.AssignedToId.Value, task.DueDate.Value);
+            }
 
             _logger.LogInformation("Task {TaskId} updated by user {UserId}", taskId, userId);
 

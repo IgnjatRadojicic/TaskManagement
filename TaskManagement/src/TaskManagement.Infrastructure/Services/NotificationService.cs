@@ -336,11 +336,6 @@ public class NotificationService : INotificationService
 
     private async Task<NotificationDto> CreateNotificationAsync(Notification notification)
     {
-        _logger.LogInformation("=== CREATING NOTIFICATION ===");
-        _logger.LogInformation("UserId: {UserId}", notification.UserId);
-        _logger.LogInformation("CreatedBy: {CreatedBy}", notification.CreatedBy);
-        _logger.LogInformation("Title: {Title}", notification.Title);
-        _logger.LogInformation("Type: {Type}", notification.Type);
 
         try
         {
