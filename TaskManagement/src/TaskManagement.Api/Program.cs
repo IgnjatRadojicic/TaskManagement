@@ -16,6 +16,7 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using TaskManagement.Infrastructure.Services.Storage;
 using TaskManagement.Api.Filters;
+using TaskManagement.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -163,6 +164,10 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+
+
+// Middleware for Exception handlin
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())

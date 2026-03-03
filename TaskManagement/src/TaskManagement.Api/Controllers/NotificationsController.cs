@@ -33,18 +33,10 @@ public class NotificationsController : BaseApiController
     [ProducesResponseType(typeof(List<NotificationDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetNotifications([FromQuery] bool unreadOnly = false)
     {
-        try
-        {
             var userId = GetUserId();
             var notifications = await _notificationService.GetUserNotificationsAsync(userId, unreadOnly);
 
             return Ok(notifications);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting notifications for user");
-            return StatusCode(500, new { message = "An error occurred while retrieving notifications" });
-        }
     }
 
 
@@ -52,18 +44,11 @@ public class NotificationsController : BaseApiController
     [ProducesResponseType(typeof(UnreadCountDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUnreadCount()
     {
-        try
-        {
+
             var userId = GetUserId();
             var count = await _notificationService.GetUnreadCountAsync(userId);
 
             return Ok(new UnreadCountDto { Count = count });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting unread count");
-            return StatusCode(500, new { message = "An error occurred while retrieving unread count" });
-        }
     }
 
 
@@ -72,22 +57,10 @@ public class NotificationsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkAsRead(Guid notificationId)
     {
-        try
-        {
             var userId = GetUserId();
             await _notificationService.MarkAsReadAsync(notificationId, userId);
 
             return Ok(new { message = "Notification marked as read" });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error marking notification {NotificationId} as read", notificationId);
-            return StatusCode(500, new { message = "An error occurred" });
-        }
     }
 
 
@@ -95,18 +68,10 @@ public class NotificationsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> MarkAllAsRead()
     {
-        try
-        {
             var userId = GetUserId();
             await _notificationService.MarkAllAsReadAsync(userId);
 
             return Ok(new { message = "All notifications marked as read" });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error marking all notifications as read");
-            return StatusCode(500, new { message = "An error occurred" });
-        }
     }
 
 
@@ -115,21 +80,10 @@ public class NotificationsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteNotification(Guid notificationId)
     {
-        try
-        {
             var userId = GetUserId();
             await _notificationService.DeleteNotificationAsync(notificationId, userId);
 
             return Ok(new { message = "Notification deleted" });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error deleting notification {NotificationId}", notificationId);
-            return StatusCode(500, new { message = "An error occurred" });
-        }
+        
     }
 }

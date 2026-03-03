@@ -40,8 +40,7 @@ namespace TaskManagement.Api.Controllers
 
         public async Task<IActionResult> CreateTask(Guid groupId, [FromBody] CreateTaskDto createTaskDto)
         {
-            try
-            {
+     
                 var userId = GetUserId();
                 var task = await _taskService.CreateTaskAsync(groupId, createTaskDto, userId);
 
@@ -64,24 +63,6 @@ namespace TaskManagement.Api.Controllers
                     nameof(GetTaskById),
                     new { taskId = task.Id },
                     task);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating task in group {GroupId}", groupId);
-                return StatusCode(500, new { message = "An error occurred while creating the task" });
-            }
 
         }
         [HttpGet("groups/{groupId}")]
@@ -95,8 +76,6 @@ namespace TaskManagement.Api.Controllers
             [FromQuery] bool? isOverDue = null,
             [FromQuery] string? searchTerm = null)
         {
-            try
-            {
                 var userId = GetUserId();
 
                 var filter = new TaskFilterDto
@@ -111,16 +90,6 @@ namespace TaskManagement.Api.Controllers
                 var tasks = await _taskService.GetGroupTasksAsync(groupId, filter, userId);
 
                 return Ok(tasks);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting tasks for group {GroupId}", groupId);
-                return StatusCode(500, new { message = "An error occurred while retrieving tasks" });
-            }
         }
 
         [HttpGet("{taskId}")]
@@ -129,26 +98,11 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetTaskById(Guid taskId)
         {
-            try
-            {
                 var userId = GetUserId();
                 var task = await _taskService.GetTaskByIdAsync(taskId, userId);
 
                 return Ok(task);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting task {TaskId}", taskId);
-                return StatusCode(500, new { message = "An error occurred while retrieving the task" });
-            }
+
         }
 
         [HttpPut("{taskId}")]
@@ -158,8 +112,6 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> UpdateTask(Guid taskId, [FromBody] UpdateTaskDto updateTaskDto)
         {
-            try
-            {
                 var userId = GetUserId();
                 var task = await _taskService.UpdateTaskAsync(taskId, updateTaskDto, userId);
 
@@ -179,24 +131,7 @@ namespace TaskManagement.Api.Controllers
 
 
                 return Ok(task);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating task {TaskId}", taskId);
-                return StatusCode(500, new { message = "An error occurred while updating the task" });
-            }
+
         }
 
         [HttpPut("{taskId}/status")]
@@ -206,8 +141,6 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> ChangeTaskStatus(Guid taskId, [FromBody] ChangeTaskStatusDto statusDto)
         {
-            try
-            {
                 var userId = GetUserId();
                 var task = await _taskService.ChangeTaskStatusAsync(taskId, statusDto, userId);
 
@@ -232,24 +165,7 @@ namespace TaskManagement.Api.Controllers
                 }
 
                 return Ok(task);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error changing status for task {TaskId}", taskId);
-                return StatusCode(500, new { message = "An error occurred while changing task status" });
-            }
+            
         }
 
         [HttpPut("{taskId}/priority")]
@@ -259,8 +175,6 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> ChangeTaskPriority(Guid taskId, [FromBody] int newPriorityId)
         {
-            try
-            {
                 var userId = GetUserId();
                 var task = await _taskService.ChangeTaskPriorityAsync(taskId, newPriorityId, userId);
 
@@ -289,31 +203,11 @@ namespace TaskManagement.Api.Controllers
                 }
 
                 return Ok(task);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error changing priority for task {TaskId}", taskId);
-                return StatusCode(500, new { message = "An error occurred while changing task priority" });
-            }
         }
 
         [HttpPost("{taskId}/assign")]
         public async Task<IActionResult> AssignTask(Guid taskId, [FromBody] AssignTaskDto assignDto)
         {
-            try
-            {
                 var userId = GetUserId();
 
                 _logger.LogInformation("=== ASSIGN TASK ===");
@@ -346,15 +240,7 @@ namespace TaskManagement.Api.Controllers
                 }
 
                 return Ok(new { message = "Task assigned successfully" });
-            }
-            catch (UnauthorizedAccessException ex) { return Unauthorized(new { message = ex.Message }); }
-            catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
-            catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error assigning task {TaskId}", taskId);
-                return StatusCode(500, new { message = "An error occurred while assigning the task" });
-            }
+            
         }
 
         [HttpPost("{taskId}/unassign")]
@@ -363,8 +249,6 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> UnassignTask(Guid taskId)
         {
-            try
-            {
                 var userId = GetUserId();
                 var task = await _taskService.GetTaskByIdAsync(taskId, userId);
 
@@ -380,20 +264,7 @@ namespace TaskManagement.Api.Controllers
                     oldValue: task.AssignedToUserName);
 
                 return Ok(new { message = "Task unassigned successfully" });
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error unassigning task {TaskId}", taskId);
-                return StatusCode(500, new { message = "An error occurred while unassigning the task" });
-            }
+            
         }
 
         [HttpDelete("{taskId}")]
@@ -402,8 +273,7 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> DeleteTask(Guid taskId)
         {
-            try
-            {
+
                 var userId = GetUserId();
                 var task = await _taskService.GetTaskByIdAsync(taskId, userId);
 
@@ -417,20 +287,8 @@ namespace TaskManagement.Api.Controllers
                     groupId: task.GroupId);
 
                 return Ok(new { message = "Task deleted successfully" });
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error deleting task {TaskId}", taskId);
-                return StatusCode(500, new { message = "An error occurred while deleting the task" });
-            }
+            
+
         }
     }
 
