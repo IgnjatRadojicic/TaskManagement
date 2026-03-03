@@ -1,10 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Drawing;
 using TaskManagement.Core.DTO.Kanban;
 using TaskManagement.Core.DTO.Tasks;
 using TaskManagement.Core.Entities;
 using TaskManagement.Core.Enums;
 using TaskManagement.Core.Interfaces;
+using TaskManagement.Core.Constants;
 
 
 namespace TaskManagement.Infrastructure.Services
@@ -40,7 +42,7 @@ namespace TaskManagement.Infrastructure.Services
                 throw new UnauthorizedAccessException("You must be a member of this group to create tasks");
             }
 
-            if (membership.Role.PermissionLevel < 50)
+            if (membership.Role.PermissionLevel < PermissionLevels.TeamLead)
             {
                 throw new UnauthorizedAccessException("Only Team Leads, Managers, and Owners can create tasks");
             }
@@ -69,7 +71,7 @@ namespace TaskManagement.Infrastructure.Services
                 Title = createTaskDto.Title,
                 Description = createTaskDto.Description,
                 GroupId = groupId,
-                StatusId = 1, // Not Started Yet! :)
+                StatusId = (int)TaskStatusItem.NotStarted, 
                 PriorityId = createTaskDto.PriorityId,
                 DueDate = createTaskDto.DueDate,
                 AssignedToId = createTaskDto.AssignedToUserId,
@@ -246,7 +248,7 @@ namespace TaskManagement.Infrastructure.Services
                 throw new UnauthorizedAccessException("You must be a member of this group");
             }
 
-            if (membership.Role.PermissionLevel < 50 && task.CreatedBy != userId)
+            if (membership.Role.PermissionLevel < PermissionLevels.TeamLead && task.CreatedBy != userId)
             {
                 throw new UnauthorizedAccessException("Only the task creator or Team Leads and above can change task priority");
             }
@@ -310,7 +312,7 @@ namespace TaskManagement.Infrastructure.Services
                 throw new UnauthorizedAccessException("You must be a member of this group");
             }
 
-            var canChangeStatus = membership.Role.PermissionLevel >= 50 || task.AssignedToId == userId || task.CreatedBy == userId;
+            var canChangeStatus = membership.Role.PermissionLevel >= PermissionLevels.TeamLead || task.AssignedToId == userId || task.CreatedBy == userId;
 
             if (!canChangeStatus)
             {
@@ -332,7 +334,7 @@ namespace TaskManagement.Infrastructure.Services
 
             task.StatusId = statusDto.NewStatusId;
 
-            if (statusDto.NewStatusId == 4)
+            if (statusDto.NewStatusId == (int)TaskStatusItem.Completed)
             {
                 task.CompletedAt = DateTime.UtcNow;
             }
@@ -380,7 +382,7 @@ namespace TaskManagement.Infrastructure.Services
                 throw new UnauthorizedAccessException("You must be a member of this group");
             }
 
-            if (membership.Role.PermissionLevel < 50)
+            if (membership.Role.PermissionLevel < PermissionLevels.TeamLead)
             {
                 throw new UnauthorizedAccessException("Only Team Leads and above can change task priority");
             }
@@ -442,7 +444,7 @@ namespace TaskManagement.Infrastructure.Services
                 throw new UnauthorizedAccessException("You must be a member of this group");
             }
 
-            if (membership.Role.PermissionLevel < 50)
+            if (membership.Role.PermissionLevel < PermissionLevels.TeamLead)
             {
                 throw new UnauthorizedAccessException("Only Team Leads and above can assign tasks");
             }
@@ -484,7 +486,7 @@ namespace TaskManagement.Infrastructure.Services
                 throw new UnauthorizedAccessException("You must be a member of this group");
             }
 
-            var canUnassign = membership.Role.PermissionLevel >= 50 || task.AssignedToId == userId;
+            var canUnassign = membership.Role.PermissionLevel >= PermissionLevels.TeamLead || task.AssignedToId == userId;
 
             if (!canUnassign)
             {
@@ -519,7 +521,7 @@ namespace TaskManagement.Infrastructure.Services
                 throw new UnauthorizedAccessException("You must be a member of this group");
             }
 
-            if (membership.Role.PermissionLevel < 75)
+            if (membership.Role.PermissionLevel < PermissionLevels.Manager)
             {
                 throw new UnauthorizedAccessException("Only Managers and Owners can delete tasks");
             }
@@ -566,14 +568,76 @@ namespace TaskManagement.Infrastructure.Services
             .ToListAsync();
         }
 
-        public Task<KanbanBoardDto> GetKanbanBoardAsync(Guid groupId, Guid userId)
+        public async Task<KanbanBoardDto> GetKanbanBoardAsync(Guid groupId, Guid userId)
         {
-            throw new NotImplementedException();
+            var membership = await _context.GroupMembers
+                .AsNoTracking()
+                .Include(gm => gm.Role)
+                .FirstOrDefaultAsync(gm => gm.GroupId == groupId && gm.UserId == userId);
+
+            if (membership == null)
+                throw new UnauthorizedAccessException("You are not a member of this group");
+
+            var group = await _context.Groups
+                .AsNoTracking()
+                .FirstOrDefaultAsync(g => g.Id == groupId);
+
+            if (group == null)
+                throw new KeyNotFoundException("Group not found");
+
+            var statuses = await _context.TaskStatuses
+               .AsNoTracking()
+               .Where(s => s.IsActive)
+               .OrderBy(s => s.DisplayOrder)
+               .ToListAsync();
+
+            var tasks = await _context.Tasks
+                .AsNoTracking()
+                .Where(t => t.GroupId == groupId)
+                .Select(t => new KanbanTaskDto
+                {
+                    Id = t.Id,
+                    Title = t.Title,
+                    Description = t.Description,
+                    StatusId = t.StatusId,
+                    PriorityId = t.PriorityId,
+                    PriorityName = t.Priority.Name,
+                    PriorityColor = t.Priority.Color,
+                    AssignedToId = t.AssignedToId,
+                    AssignedToUserName = t.AssignedTo != null ? t.AssignedTo.UserName : null,
+                    DisplayOrder = t.DisplayOrder,
+                    DueDate = t.DueDate,
+                    CommentCount = t.Comments.Count,      
+                    AttachmentCount = t.Attachments.Count 
+                })
+                .OrderBy(t => t.DisplayOrder)
+                .ToListAsync();
+
+            var board = new KanbanBoardDto
+            {
+                GroupId = group.Id,
+                GroupName = group.Name,
+
+                Columns = statuses.Select(status => new KanbanColumnDto
+                { 
+                    StatusId = status.Id,
+                    StatusName = status.Name,
+                    DisplayName = status.DisplayName,
+                    Color = status.Color,
+                    DisplayOrder = status.DisplayOrder,
+                    Tasks = tasks.Where(t => t.StatusId == status.Id).ToList()
+
+
+                }).ToList()
+            };
+
+            return board;
         }
 
-        public Task MoveTaskAsync(Guid taskId, MoveTaskDto moveDto, Guid userId)
+        public async Task MoveTaskAsync(Guid taskId, MoveTaskDto moveDto, Guid userId)
         {
-            throw new NotImplementedException();
+            const int maxRetries = 3;
+            int attempt = 0;
         }
     }
 }

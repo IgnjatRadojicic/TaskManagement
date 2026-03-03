@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TaskManagement.Core.Constants;
 using TaskManagement.Core.DTO.Comments;
 using TaskManagement.Core.Entities;
 using TaskManagement.Core.Interfaces;
@@ -143,7 +144,7 @@ public class CommentService : ICommentService
             throw new UnauthorizedAccessException("You must be a member of the group");
         }
 
-        var canDelete = comment.UserId == userId || membership.Role.PermissionLevel >= 75;
+        var canDelete = comment.UserId == userId || membership.Role.PermissionLevel >= PermissionLevels.Manager;
 
         if (!canDelete)
         {

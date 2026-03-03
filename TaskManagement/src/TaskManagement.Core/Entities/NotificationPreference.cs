@@ -15,6 +15,6 @@ namespace TaskManagement.Core.Entities
         public bool IsEnabled { get; set; } = true;
         public int? ReminderHoursBefore { get; set; }
 
-        public User User { get; set; }
+        public User User { get; set; } = null!;
     }
 }

@@ -12,6 +12,7 @@ using TaskManagement.Core.Configuration;
 using TaskManagement.Core.DTO.Attachments;
 using TaskManagement.Core.Entities;
 using TaskManagement.Core.Interfaces;
+using TaskManagement.Core.Constants;
 
 namespace TaskManagement.Infrastructure.Services
 {
@@ -202,7 +203,7 @@ namespace TaskManagement.Infrastructure.Services
                 throw new UnauthorizedAccessException("You must be a member of the group");
             }
 
-            var canDelete = membership.Role.PermissionLevel >= 75 || attachment.CreatedBy == userId;
+            var canDelete = membership.Role.PermissionLevel >= PermissionLevels.Manager || attachment.CreatedBy == userId;
 
             if (!canDelete)
             {

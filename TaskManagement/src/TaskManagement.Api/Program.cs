@@ -16,7 +16,6 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using TaskManagement.Infrastructure.Services.Storage;
 using TaskManagement.Api.Filters;
-using System.Net.WebSockets;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,8 +43,6 @@ var jwtIssuer = builder.Configuration["JwtSettings:Issuer"]!;
 var jwtAudience = builder.Configuration["JwtSettings:Audience"]!;
 
 
-builder.Services.Configure<FileStorageSettings>(
-    builder.Configuration.GetSection("FileStorage"));
 
 builder.Services.AddAuthentication(options =>
 {
@@ -174,30 +171,21 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "Task Management API v1");
-        options.RoutePrefix = string.Empty; // Swagger at root URL
+        options.RoutePrefix = string.Empty;
     });
 }
 
+app.UseHttpsRedirection();   // 1. HTTPS first
+app.UseCors("AllowFrontend"); // 2. CORS before auth
+app.UseAuthentication();      // 3. Auth
+app.UseAuthorization();       // 4. Authorization
 
-app.UseAuthentication();
-app.UseAuthorization();
-
-// Hangfire DashBoard
+// Hangfire Dashboard
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
     Authorization = new[] { new HangfireAuthorizationFilter() }
 });
 
-app.MapHub<NotificationHub>("/hubs/notifications");
-app.MapControllers();
-
-
-app.UseHttpsRedirection();
-
-app.UseCors("AllowFrontend");
-
-app.UseAuthentication();
-app.UseAuthorization();
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapControllers();
 

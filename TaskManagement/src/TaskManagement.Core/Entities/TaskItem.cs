@@ -28,8 +28,9 @@ namespace TaskManagement.Core.Entities
 
         public int DisplayOrder { get; set; } = 0;
 
+
         [Timestamp]
-        public byte[] RowVersion { get; set; } = null!;
+        public uint RowVersion { get; set; }
 
         public virtual Group Group { get; set; } = null!;
         public virtual User? AssignedTo { get; set; }
