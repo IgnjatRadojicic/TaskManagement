@@ -78,6 +78,7 @@ builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationBroadcaster, SignalRNotificationBroadcaster>();
+builder.Services.AddScoped<IKanbanBroadcaster, KanbanBroadcaster>();
 builder.Services.AddScoped<IBackgroundJobService, BackgroundJobService>();
 builder.Services.AddScoped<NotificationBackgroundJob>();
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -192,6 +193,8 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 });
 
 app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHub<KanbanHub>("/hubs/kanban");
 app.MapControllers();
 
 // Hangfire Jobs

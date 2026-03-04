@@ -12,11 +12,12 @@ namespace TaskManagement.Api.Controllers
     {
         private readonly ITaskService _taskService;
         private readonly IAuditService _auditService;
-
-        public KanbanController(ITaskService taskService, IAuditService auditService)
+        private readonly IKanbanBroadcaster _kanbanBroadcaster;
+        public KanbanController(ITaskService taskService, IAuditService auditService, IKanbanBroadcaster kanbanBroadcaster)
         {
             _taskService = taskService;
             _auditService = auditService;
+            _kanbanBroadcaster = kanbanBroadcaster;
         }
 
         [HttpGet("{groupId}")]
@@ -46,6 +47,10 @@ namespace TaskManagement.Api.Controllers
                 action: "Moved",
                 propertyName: "StatusId",
                 newValue: moveDto.NewStatusId.ToString());
+
+            var task = await _taskService.GetTaskByIdAsync(taskId, userId);
+
+            await _kanbanBroadcaster.BroadcastTaskMovedAsync(task.GroupId, taskId, moveDto, userId);
 
             return Ok(new { message = "Task moved successfully" });
         }
