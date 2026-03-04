@@ -14,7 +14,7 @@ namespace TaskManagement.Core.Interfaces
 {
     public interface IApplicationDbContext
     {
-
+        Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }
         DbSet<User> Users { get; set; }
         DbSet<Group> Groups { get; set; }
         DbSet<GroupMember> GroupMembers { get; set; }
