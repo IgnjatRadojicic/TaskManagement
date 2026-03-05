@@ -438,6 +438,7 @@ namespace TaskManagement.Infrastructure.Services
                 _backgroundJobService.ScheduleTaskDueSoonNotification(task.Id, assignDto.UserId, task.DueDate.Value);
             }
 
+
             var membership = await _context.GroupMembers
                 .Include(gm => gm.Role)
                 .FirstOrDefaultAsync(gm => gm.GroupId == task.GroupId && gm.UserId == userId);

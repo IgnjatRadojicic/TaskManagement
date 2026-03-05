@@ -64,6 +64,9 @@ public class CommentsController : BaseApiController
                 await _notificationBroadcaster.BroadcastNotificationAsync(notification);
             }
 
+            await _notificationService.TrySendCommentEmailAsync(
+                 task.AssignedToId ?? Guid.Empty, userId, task.Title, comment.Content);
+
             return CreatedAtAction(nameof(GetTaskComments), new { taskId }, comment);
         
     }

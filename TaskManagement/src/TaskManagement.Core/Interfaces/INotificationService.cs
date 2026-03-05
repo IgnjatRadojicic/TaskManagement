@@ -26,4 +26,10 @@ public interface INotificationService
     Task<bool> ShouldNotifyAsync(Guid userId, NotificationType type);
 
     Task<int> GetReminderHoursBeforeAsync(Guid userId);
+
+    Task<bool> ShouldEmailAsync(Guid userId, NotificationType type);
+    Task<(string Email, string UserName)?> GetUserContactAsync(Guid userId);
+
+    Task TrySendTaskAssignmentEmailAsync(Guid assigneeUserId, string taskTitle, string groupName, string assignedByUserName);
+    Task TrySendCommentEmailAsync(Guid taskAssignedToUserId, Guid commenterId, string taskTitle, string commentContent);
 }

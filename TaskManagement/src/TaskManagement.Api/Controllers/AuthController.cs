@@ -91,7 +91,6 @@ namespace TaskManagement.Api.Controllers
 
         [HttpPost("forgot-password")]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto forgotPasswordDto)
         {
                 await _authService.ForgotPasswordAsync(forgotPasswordDto.Email);

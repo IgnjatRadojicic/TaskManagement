@@ -9,17 +9,21 @@ using TaskManagement.Core.Entities;
 using TaskManagement.Core.Enums;
 using TaskManagement.Core.Interfaces;
 
+
 namespace TaskManagement.Infrastructure.Services;
 
 public class NotificationService : INotificationService
 {
     private readonly IApplicationDbContext _context;
     private readonly ILogger<NotificationService> _logger;
+    private readonly IEmailService _emailService;
 
     public NotificationService(
         IApplicationDbContext context,
-        ILogger<NotificationService> logger)
+        ILogger<NotificationService> logger,
+        IEmailService emailService)
     {
+        _emailService = emailService;
         _context = context;
         _logger = logger;
     }
@@ -375,7 +379,8 @@ public class NotificationService : INotificationService
                 Type = type,
                 TypeName = type.ToString(),
                 Description = GetNotificationTypeDescription(type),
-                IsEnabled = existing?.IsEnabled ?? true,  
+                IsEnabled = existing?.IsEnabled ?? true,
+                IsEmailEnabled = existing?.IsEmailEnabled ?? true,
                 ReminderHoursBefore = existing?.ReminderHoursBefore ?? (type == NotificationType.TaskDueSoon ? 24 : null)
             });
 
@@ -399,6 +404,7 @@ public class NotificationService : INotificationService
             if (existingPreferences.TryGetValue(item.Type, out var preference))
             {
                 preference.IsEnabled = item.IsEnabled;
+                preference.IsEmailEnabled = item.IsEmailEnabled;
                 preference.ReminderHoursBefore = item.ReminderHoursBefore;
                 preference.UpdatedBy = userId;
                 preference.UpdatedAt = DateTime.UtcNow;
@@ -410,6 +416,7 @@ public class NotificationService : INotificationService
                     UserId = userId,
                     Type = item.Type,
                     IsEnabled = item.IsEnabled,
+                    IsEmailEnabled = item.IsEmailEnabled,
                     ReminderHoursBefore = item.ReminderHoursBefore,
                     CreatedBy = userId
                 });
@@ -452,4 +459,81 @@ public class NotificationService : INotificationService
         };
     }
 
+    public async Task<bool> ShouldEmailAsync(Guid userId, NotificationType type)
+    {
+        var preference = await _context.NotificationPreferences
+            .FirstOrDefaultAsync(np => np.UserId == userId && np.Type == type);
+
+        return preference?.IsEmailEnabled ?? true;
+    }
+
+    public async Task<(string Email, string UserName)?> GetUserContactAsync(Guid userId)
+    {
+        var user = await _context.Users
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.Email, u.UserName })
+            .FirstOrDefaultAsync();
+
+        if (user == null) return null;
+
+        return (user.Email, user.UserName);
+    }
+
+    public async Task TrySendTaskAssignmentEmailAsync(Guid assigneeUserId, string taskTitle, string groupName, string assignedByUserName)
+    {
+      try
+        {
+
+            if (!await ShouldEmailAsync(assigneeUserId, NotificationType.TaskAssigned))
+                return;
+
+            var contact = await GetUserContactAsync(assigneeUserId);
+            if (contact == null)
+                return;
+
+            await _emailService.SendTaskAssignmentEmailAsync(
+                contact.Value.Email,
+                contact.Value.UserName,
+                taskTitle,
+                groupName,
+                assignedByUserName);
+            
+        }
+      catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send task assignment email to user {UserId}", assigneeUserId);
+        }
+    }
+
+    public async Task TrySendCommentEmailAsync(Guid taskAssignedToUserId, Guid commenterId, string taskTitle, string commentContent)
+    {
+        try
+        {
+            if (taskAssignedToUserId == commenterId)
+                return;
+
+            if (!await ShouldEmailAsync(taskAssignedToUserId, NotificationType.TaskCommentAdded))
+                return;
+
+            var assignee = await GetUserContactAsync(taskAssignedToUserId);
+            var commenter = await GetUserContactAsync(commenterId);
+
+            if (assignee == null || commenter == null)
+                return;
+
+
+            await _emailService.SendTaskCommentEmailAsync(
+                assignee.Value.Email,
+                assignee.Value.UserName,
+                commenter.Value.UserName,
+                taskTitle,
+                commentContent);
+
+        }
+
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send comment email to user {UserId}", taskAssignedToUserId);
+        }
+    }
 }

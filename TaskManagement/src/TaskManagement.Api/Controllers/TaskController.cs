@@ -5,6 +5,7 @@ using TaskManagement.Api.Interfaces;
 using TaskManagement.Core.DTO.Tasks;
 using TaskManagement.Core.Entities;
 using TaskManagement.Core.Interfaces;
+using TaskManagement.Infrastructure.Services;
 namespace TaskManagement.Api.Controllers
 {
     [Authorize]
@@ -23,7 +24,7 @@ namespace TaskManagement.Api.Controllers
             IAuditService auditService,
             INotificationBroadcaster notificationBroadcaster,
             INotificationService notificationService,
-            ILogger<TaskController> logger)
+        ILogger<TaskController> logger)
         {
             _taskService = taskService;
             _notificationBroadcaster = notificationBroadcaster;
@@ -208,17 +209,10 @@ namespace TaskManagement.Api.Controllers
         [HttpPost("{taskId}/assign")]
         public async Task<IActionResult> AssignTask(Guid taskId, [FromBody] AssignTaskDto assignDto)
         {
-                var userId = GetUserId();
-
-                _logger.LogInformation("=== ASSIGN TASK ===");
-                _logger.LogInformation("TaskId: {TaskId}", taskId);
-                _logger.LogInformation("AssignToUserId: {UserId}", assignDto.UserId);
+                var userId = GetUserId();;
 
                 await _taskService.AssignTaskAsync(taskId, assignDto, userId);
                 var task = await _taskService.GetTaskByIdAsync(taskId, userId);
-
-                _logger.LogInformation("Task retrieved: {Title}", task.Title);
-                _logger.LogInformation("Calling NotifyTaskAssignedAsync...");
 
                 await LogAuditAsync(
                     _auditService,
@@ -238,6 +232,8 @@ namespace TaskManagement.Api.Controllers
                     await _notificationBroadcaster.BroadcastNotificationAsync(notification);
                     _logger.LogInformation("Broadcast complete");
                 }
+
+            await _notificationService.TrySendTaskAssignmentEmailAsync(assignDto.UserId, task.Title, task.GroupName, task.CreatedByUserName);
 
                 return Ok(new { message = "Task assigned successfully" });
             

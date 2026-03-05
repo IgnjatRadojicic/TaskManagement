@@ -9,6 +9,8 @@ public class NotificationPreferenceDto
     public string TypeName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public bool IsEnabled { get; set; }
+
+    public bool IsEmailEnabled { get; set; } = true;
     public int? ReminderHoursBefore { get; set; }
 }
 
@@ -28,4 +30,7 @@ public class NotificationPreferenceUpdateItem
 
     [Range(1, 168)]
     public int? ReminderHoursBefore { get; set; }
+
+    [Required]
+    public bool IsEmailEnabled { get; set; }
 }

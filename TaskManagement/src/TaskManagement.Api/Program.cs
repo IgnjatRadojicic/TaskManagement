@@ -17,6 +17,7 @@ using Hangfire.PostgreSql;
 using TaskManagement.Infrastructure.Services.Storage;
 using TaskManagement.Api.Filters;
 using TaskManagement.Api.Middleware;
+using TaskManagement.Infrastructure.Services.Email;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,6 +44,10 @@ var jwtKey = builder.Configuration["JwtSettings:Secret"]!;
 var jwtIssuer = builder.Configuration["JwtSettings:Issuer"]!;
 var jwtAudience = builder.Configuration["JwtSettings:Audience"]!;
 
+
+// Email
+builder.Services.Configure<EmailSettings>(
+    builder.Configuration.GetSection("EmailSettings"));
 
 
 builder.Services.AddAuthentication(options =>

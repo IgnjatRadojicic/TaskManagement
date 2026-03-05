@@ -12,12 +12,19 @@ namespace TaskManagement.Infrastructure.Services
     {
         private readonly IApplicationDbContext _context;
         private readonly ILogger<NotificationBackgroundJob> _logger;
+        private readonly IEmailService _emailService;
+        private readonly INotificationService _notificationService;
+
 
         public NotificationBackgroundJob(IApplicationDbContext context,
-            ILogger<NotificationBackgroundJob> logger)
+            ILogger<NotificationBackgroundJob> logger,
+            IEmailService emailService,
+            INotificationService notificationService)
         {
             _context = context;
             _logger = logger;
+            _emailService = emailService;
+            _notificationService = notificationService;
         }
 
         [AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 60, 300, 3600 })]
@@ -74,6 +81,23 @@ namespace TaskManagement.Infrastructure.Services
 
             _context.Notifications.Add(notification);
             await _context.SaveChangesAsync();
+
+
+            try
+            {
+                if (await _notificationService.ShouldEmailAsync(task.AssignedToId.Value, NotificationType.TaskDueSoon))
+                {
+                    await _emailService.SendTaskDueSoonEmailAsync(
+                        task.AssignedTo!.Email,
+                        task.AssignedTo.UserName,
+                        task.Title,
+                        task.DueDate!.Value);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send due soon email for task {TaskId}", taskId);
+            }
 
             _logger.LogInformation("Due soon notification created for task {TaskId}", taskId);
         }
@@ -137,6 +161,22 @@ namespace TaskManagement.Infrastructure.Services
 
                 _context.Notifications.Add(notification);
                 notificationsCreated++;
+
+                try
+                {
+                    if (await _notificationService.ShouldEmailAsync(task.AssignedToId!.Value, NotificationType.TaskOverdue))
+                    {
+                        await _emailService.SendTaskOverdueEmailAsync(
+                            task.AssignedTo!.Email,
+                            task.AssignedTo.UserName,
+                            task.Title,
+                            daysSinceOverdue);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send overdue email for task {TaskId}", task.Id);
+                }
             }
 
             if (notificationsCreated > 0)

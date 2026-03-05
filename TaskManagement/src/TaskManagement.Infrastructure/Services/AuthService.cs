@@ -224,9 +224,19 @@ namespace TaskManagement.Infrastructure.Services
             await _context.SaveChangesAsync();
 
 
-            var resetLink = $"willset?token={resetToken}";
+            var frontendUrl = _configuration["App:FrontendUrl"];
+            var resetLink = $"{frontendUrl}/reset-password?token={resetToken}&email={Uri.EscapeDataString(user.Email)}";
             await _emailService.SendPasswordResetEmailAsync(user.Email, user.UserName, resetLink);
-            _logger.LogInformation("Password reset email sent to: {Email}", email);
+
+            try
+            {
+                await _emailService.SendPasswordResetEmailAsync(user.Email, user.UserName, resetLink);
+                _logger.LogInformation("Password reset email sent to: {Email}", email);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send password reset email");
+            }
         }
 
 
