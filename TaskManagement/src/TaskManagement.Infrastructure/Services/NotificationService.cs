@@ -6,6 +6,7 @@ using TaskManagement.Core.DTO.Tasks;
 using TaskManagement.Core.Entities;
 using TaskManagement.Core.Enums;
 using TaskManagement.Core.Interfaces;
+using TaskManagement.Infrastructure.Interfaces;
 
 
 namespace TaskManagement.Infrastructure.Services;

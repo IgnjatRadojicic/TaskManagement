@@ -203,7 +203,8 @@ namespace TaskManagement.Infrastructure.Services
 
             if (user == null)
             {
-                throw new KeyNotFoundException("User with this email does not exist");
+                _logger.LogWarning("Password reset requested for non-existent email: {Email}", email);
+                return;
             }
 
             var resetToken = Guid.NewGuid().ToString("N");
@@ -226,7 +227,6 @@ namespace TaskManagement.Infrastructure.Services
 
             var frontendUrl = _configuration["App:FrontendUrl"];
             var resetLink = $"{frontendUrl}/reset-password?token={resetToken}&email={Uri.EscapeDataString(user.Email)}";
-            await _emailService.SendPasswordResetEmailAsync(user.Email, user.UserName, resetLink);
 
             try
             {
