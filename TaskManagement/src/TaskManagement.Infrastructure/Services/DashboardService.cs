@@ -1,6 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.Tokens;
 using TaskManagement.Core.Constants;
 using TaskManagement.Core.DTO.Dashboard;
 using TaskManagement.Core.Enums;
@@ -255,13 +254,13 @@ namespace TaskManagement.Infrastructure.Services
         {
             TreeStage stage = completionPercentage switch
             {
-                0 => TreeStage.EmptySoil,
+                TreeThresholds.NoSeedPlanted => TreeStage.EmptySoil,
                 < TreeThresholds.SeedThreshold => TreeStage.Seed,
                 < TreeThresholds.SproutThreshold => TreeStage.Sprout,
                 < TreeThresholds.SaplingThreshold => TreeStage.Sapling,
                 < TreeThresholds.YoungTreeThreshold => TreeStage.YoungTree,
                 < TreeThresholds.FullTreeThreshold => TreeStage.FullTree,
-                100 => TreeStage.FloweringTree,
+                TreeThresholds.FullTreeThreshold => TreeStage.FloweringTree,
                 _ => TreeStage.EmptySoil
             };
 
