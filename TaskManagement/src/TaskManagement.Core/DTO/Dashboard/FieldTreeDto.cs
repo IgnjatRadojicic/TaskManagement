@@ -6,7 +6,7 @@ namespace TaskManagement.Core.DTO.Dashboard
     {
        public Guid GroupId { get; set; }
         public string GroupName { get; set; } = string.Empty;
-        public double CpmpletionPercentage { get; set; }
+        public double CompletionPercentage { get; set; }
         public int TreeStage { get; set; }
         public int MemberCount { get; set; }
         public int TotalTasks { get; set; }
