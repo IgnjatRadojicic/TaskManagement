@@ -72,7 +72,7 @@ namespace TaskManagement.Infrastructure.Services
                 .ToList();
 
             var recentActivity = await _context.AuditLogs
-                .Where(a => userGroupIds.Contains(a.GroupId!.Value))
+                .Where(a => a.GroupId.HasValue && userGroupIds.Contains(a.GroupId.Value))
                 .OrderByDescending(a => a.CreatedAt)
                 .Take(15)
                 .Select(a => new ActivityDto {
