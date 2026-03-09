@@ -35,8 +35,6 @@ namespace TaskManagement.Infrastructure.Services
             string? reason = null
             )
         {
-            try
-            {
 
                 var user = await _context.Users.FindAsync(userId);
                 if (user == null)
@@ -69,17 +67,10 @@ namespace TaskManagement.Infrastructure.Services
                 _logger.LogInformation(
                 "Audit log created: {EntityType} {EntityId} - {Action} by user {UserId} in group {GroupId}",
                 entityType, entityId, action, userId, groupId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error Creating Audit Log");
-
-            }
+            
         }
         public async Task<List<AuditLogDto>> GetEntityHistoryAsync(string entityType, Guid entityId, Guid requestingUserId)
         {
-            try
-            {
                 Guid? groupId = await GetEntityGroupdIdAsync(entityType, entityId);
 
                 if(groupId.HasValue)
@@ -113,18 +104,11 @@ namespace TaskManagement.Infrastructure.Services
                     .ToListAsync();
 
                 return logs;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving entity history");
-                throw;
-            }
+            
         }
 
         public async Task<List<AuditLogDto>> GetGroupHistoryAsync(Guid groupId, Guid requestingUserId, int pageNumber = 1, int pageSize = 50)
         {
-            try
-            {
                 var membership = await _context.GroupMembers
                     .FirstOrDefaultAsync(gm => gm.GroupId == groupId && gm.UserId == requestingUserId);
 
@@ -156,18 +140,11 @@ namespace TaskManagement.Infrastructure.Services
                     .ToListAsync();
 
                 return logs;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving group history");
-                throw;
-            }
+            
         }
 
         public async Task<List<AuditLogDto>> GetUserHistoryAsync(Guid userId, Guid requestingUserId, int pageNumber = 1, int pageSize = 50)
         {
-            try
-            {
                 var userGroupIds = await _context.GroupMembers
                     .Where(gm => gm.UserId == requestingUserId)
                     .Select(gm => gm.GroupId)
@@ -198,12 +175,7 @@ namespace TaskManagement.Infrastructure.Services
                     .ToListAsync();
 
                 return logs;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving user history");
-                throw;
-            }
+            
         }
 
 
