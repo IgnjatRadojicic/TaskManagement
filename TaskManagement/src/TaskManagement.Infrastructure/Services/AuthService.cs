@@ -274,7 +274,6 @@ namespace TaskManagement.Infrastructure.Services
                 throw new InvalidOperationException("Invalid or expired reset token");
             }
 
-            var user = resetToken.User;
             user.PasswordHash = _passwordHasher.HashPassword(resetPasswordDto.NewPassword);
             user.UpdatedAt = DateTime.UtcNow;
 
