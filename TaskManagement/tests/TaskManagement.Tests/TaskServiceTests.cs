@@ -505,8 +505,7 @@ public class TaskServiceTests
         _mockContext.Setup(c => c.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ThrowsAsync(new DbUpdateConcurrencyException("Concurrent modification"));
 
-        _mockContext.Setup(c => c.ChangeTracker)
-            .Returns(Mock.Of<Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker>());
+        _mockContext.Setup(c => c.ClearChangeTracker());
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => _sut.MoveTaskAsync(TaskId1, new MoveTaskDto

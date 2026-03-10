@@ -723,7 +723,7 @@ namespace TaskManagement.Infrastructure.Services
                             "The task was modified by another user. Please refresh the board and try again.", ex);
                     }
 
-                    _context.ChangeTracker.Clear();
+                    _context.ClearChangeTracker();
                     await Task.Delay(50 * attempt);
                 }
             }

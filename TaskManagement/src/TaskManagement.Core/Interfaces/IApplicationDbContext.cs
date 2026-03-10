@@ -31,6 +31,8 @@ namespace TaskManagement.Core.Interfaces
         DbSet<AuditLog> AuditLogs { get; set; }
         DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
+        void ClearChangeTracker();
+
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }
 }
