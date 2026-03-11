@@ -21,6 +21,13 @@ namespace TaskManagement.Core.Interfaces
         Task RevokeAllUserTokensAsync(Guid userId);
 
 
+        Task StoreVerificationCodeAsync(string email, string codeHash, TimeSpan expiration);
+        Task<string?> GetVerificationCodeHashAsync(string email);
+        Task MarkVerificationCodeUsedAsync(string email);
+        Task<bool> IsEmailVerifiedAsync(string email);
+        Task<DateTime?> GetVerificationCodeCreatedAtAsync(string email);
+
+
         // Generic cache operations
 
         Task<T?> GetAsync<T>(string key);
