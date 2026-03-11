@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using TaskManagement.Api.Extensions;
 using TaskManagement.Api.Hubs;
@@ -10,6 +11,7 @@ namespace TaskManagement.Api.Controllers;
 
 [Authorize]
 [ApiController]
+[EnableRateLimiting("general")]
 [Route("api/[controller]")]
 public class NotificationsController : BaseApiController
 {

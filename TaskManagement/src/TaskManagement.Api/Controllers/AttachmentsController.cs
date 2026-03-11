@@ -1,6 +1,7 @@
 ﻿
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TaskManagement.Api.Extensions;
 using TaskManagement.Core.DTO.Attachments;
 using TaskManagement.Core.Interfaces;
@@ -9,6 +10,7 @@ namespace TaskManagement.Api.Controllers;
 
 [Authorize]
 [ApiController]
+[EnableRateLimiting("general")]
 [Route("api/tasks/{taskId}/attachments")]
 public class AttachmentsController : BaseApiController
 {

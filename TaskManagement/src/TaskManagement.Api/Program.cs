@@ -17,7 +17,8 @@ using Hangfire.PostgreSql;
 using TaskManagement.Infrastructure.Services.Storage;
 using TaskManagement.Api.Filters;
 using TaskManagement.Api.Middleware;
-using TaskManagement.Infrastructure.Services.Email;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -71,6 +72,29 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddFixedWindowLimiter("auth", opt =>
+    {
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.PermitLimit = 10;
+    });
+
+    options.AddFixedWindowLimiter("verification", opt =>
+    {
+        opt.Window = TimeSpan.FromMinutes(5);
+        opt.PermitLimit = 5;
+    });
+
+    options.AddFixedWindowLimiter("general", opt =>
+    {
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.PermitLimit = 60;
+    });
+});
 
 // Application Services
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -190,7 +214,7 @@ app.UseHttpsRedirection();   // 1. HTTPS first
 app.UseCors("AllowFrontend"); // 2. CORS before auth
 app.UseAuthentication();      // 3. Auth
 app.UseAuthorization();       // 4. Authorization
-
+app.UseRateLimiter();
 // Hangfire Dashboard
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {

@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TaskManagement.Api.Extensions;
 using TaskManagement.Api.Interfaces;
 using TaskManagement.Core.DTO.Comments;
@@ -9,6 +10,7 @@ namespace TaskManagement.Api.Controllers;
 
 [Authorize]
 [ApiController]
+[EnableRateLimiting("general")]
 [Route("api/tasks/{taskId}/comments")]
 public class CommentsController : BaseApiController
 {

@@ -3,10 +3,12 @@ using Microsoft.AspNetCore.Mvc;
 using TaskManagement.Api.Extensions;
 using TaskManagement.Core.DTO.Auth;
 using TaskManagement.Core.Interfaces;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace TaskManagement.Api.Controllers
 {
     [ApiController]
+    [EnableRateLimiting("auth")]
     [Route("api/[controller]")]
     public class AuthController : BaseApiController
     {
@@ -137,6 +139,7 @@ namespace TaskManagement.Api.Controllers
         }
 
         [HttpPost("check-email")]
+        [EnableRateLimiting("verification")]
         public async Task<IActionResult> CheckEmail([FromBody] CheckEmailDto dto)
         {
             var result = await _authService.CheckEmailAsync(dto.Email);
@@ -144,6 +147,8 @@ namespace TaskManagement.Api.Controllers
         }
 
         [HttpPost("send-verification")]
+        [EnableRateLimiting("verification")]
+
         public async Task<IActionResult> SendVerification([FromBody] VerifyEmailDto dto)
         {
             var result = await _authService.SendVerificationCodeAsync(dto.Email);
@@ -154,6 +159,7 @@ namespace TaskManagement.Api.Controllers
         }
 
         [HttpPost("verify-email")]
+        [EnableRateLimiting("verification")]
         public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailDto dto)
         {
             var result = await _authService.VerifyEmailCodeAsync(dto.Email, dto.Code);
@@ -164,6 +170,7 @@ namespace TaskManagement.Api.Controllers
         }
 
         [HttpPost("google-login")]
+
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginDto dto)
         {
             var result = await _authService.GoogleLoginAsync(dto);

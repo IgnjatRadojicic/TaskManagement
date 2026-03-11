@@ -4,12 +4,14 @@ using TaskManagement.Api.Extensions;
 using TaskManagement.Api.Interfaces;
 using TaskManagement.Core.DTO.Tasks;
 using TaskManagement.Core.Interfaces;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace TaskManagement.Api.Controllers
 {
     [Authorize]
     [ApiController]
     [Route("api/[controller]")]
+    [EnableRateLimiting("general")]
     public class TaskController : BaseApiController
     {
         private readonly ITaskService _taskService;
@@ -17,6 +19,7 @@ namespace TaskManagement.Api.Controllers
         private readonly ILogger<TaskController> _logger;
         private readonly INotificationService _notificationService;
         private readonly INotificationBroadcaster _notificationBroadcaster;
+
 
         public TaskController(
             ITaskService taskService,

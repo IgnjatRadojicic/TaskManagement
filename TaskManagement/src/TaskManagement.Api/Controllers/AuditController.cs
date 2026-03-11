@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TaskManagement.Api.Extensions;
 using TaskManagement.Core.DTO.Audit;
 using TaskManagement.Core.Interfaces;
@@ -8,6 +9,7 @@ namespace TaskManagement.Api.Controllers
 {
     [Authorize]
     [Route("api/[controller]")]
+    [EnableRateLimiting("general")]
     [Produces("application/json")]
     public class AuditController : BaseApiController
     {
