@@ -1,6 +1,6 @@
-﻿using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TaskManagement.Api.Extensions;
 using TaskManagement.Core.DTO.Groups;
 using TaskManagement.Core.Interfaces;
 
@@ -31,19 +31,23 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> CreateGroup([FromBody] CreateGroupDto createGroupDto)
         {
-                var userId = GetUserId();
-                var group = await _groupService.CreateGroupAsync(createGroupDto, userId);
+            var userId = GetUserId();
+            var result = await _groupService.CreateGroupAsync(createGroupDto, userId);
 
-                await LogAuditAsync(
-                    _auditService,
-                    entityType: "Group",
-                    entityId: group.Id,
-                    action: "Created",
-                    groupId: group.Id);
+            if (result.IsFailure)
+                return result.ToActionResult();
 
-                return Ok(group);
+            var group = result.Value!;
+
+            await LogAuditAsync(
+                _auditService,
+                entityType: "Group",
+                entityId: group.Id,
+                action: "Created",
+                groupId: group.Id);
+
+            return Ok(group);
         }
-
 
         [HttpPost("join")]
         [ProducesResponseType(typeof(GroupDto), StatusCodes.Status200OK)]
@@ -51,30 +55,32 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> JoinGroup([FromBody] JoinGroupDto joinGroupDto)
         {
-                var userId = GetUserId();
-                var group = await _groupService.JoinGroupAsync(joinGroupDto, userId);
+            var userId = GetUserId();
+            var result = await _groupService.JoinGroupAsync(joinGroupDto, userId);
 
-                await LogAuditAsync(
-                    _auditService,
-                    entityType: "GroupMember",
-                    entityId: userId,
-                    action: "JoinedGroup",
-                    groupId: group.Id);
+            if (result.IsFailure)
+                return result.ToActionResult();
 
-                return Ok(group);
+            var group = result.Value!;
+
+            await LogAuditAsync(
+                _auditService,
+                entityType: "GroupMember",
+                entityId: userId,
+                action: "JoinedGroup",
+                groupId: group.Id);
+
+            return Ok(group);
         }
-
 
         [HttpGet]
         [ProducesResponseType(typeof(List<GroupDto>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetUserGroups()
         {
-                var userId = GetUserId();
-                var groups = await _groupService.GetUserGroupsAsync(userId);
-                return Ok(groups);
-           
+            var userId = GetUserId();
+            var result = await _groupService.GetUserGroupsAsync(userId);
+            return result.ToActionResult();
         }
-
 
         [HttpGet("{groupId}")]
         [ProducesResponseType(typeof(GroupDetailsDto), StatusCodes.Status200OK)]
@@ -82,9 +88,9 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetGroupDetails(Guid groupId)
         {
-                var userId = GetUserId();
-                var groupDetails = await _groupService.GetGroupDetailsAsync(groupId, userId);
-                return Ok(groupDetails);
+            var userId = GetUserId();
+            var result = await _groupService.GetGroupDetailsAsync(groupId, userId);
+            return result.ToActionResult();
         }
 
         [HttpPut("{groupId}")]
@@ -93,47 +99,51 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> UpdateGroup(Guid groupId, [FromBody] UpdateGroupDto updateGroupDto)
         {
-                var userId = GetUserId();
-                var group = await _groupService.UpdateGroupAsync(groupId, updateGroupDto, userId);
+            var userId = GetUserId();
+            var result = await _groupService.UpdateGroupAsync(groupId, updateGroupDto, userId);
 
+            if (result.IsFailure)
+                return result.ToActionResult();
 
-                await LogAuditAsync(
-                    _auditService,
-                    entityType: "Group",
-                    entityId: groupId,
-                    action: "Updated",
-                    groupId: groupId);
+            var group = result.Value!;
 
-                return Ok(group);
+            await LogAuditAsync(
+                _auditService,
+                entityType: "Group",
+                entityId: groupId,
+                action: "Updated",
+                groupId: groupId);
+
+            return Ok(group);
         }
-
 
         [HttpPut("{groupId}/members/{memberId}/role")]
         [ProducesResponseType(typeof(GroupMemberDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> ChangeUserRole(
-            Guid groupId,
-            Guid memberId,
-            [FromBody] ChangeRoleDto changeRoleDto)
+            Guid groupId, Guid memberId, [FromBody] ChangeRoleDto changeRoleDto)
         {
-                var userId = GetUserId();
-                var member = await _groupService.ChangeUserRoleAsync(groupId, memberId, changeRoleDto, userId);
+            var userId = GetUserId();
+            var result = await _groupService.ChangeUserRoleAsync(groupId, memberId, changeRoleDto, userId);
 
-                // Log audit WITH groupId
-                await LogAuditAsync(
-                    _auditService,
-                    entityType: "GroupMember",
-                    entityId: memberId,
-                    action: "RoleChanged",
-                    groupId: groupId,
-                    propertyName: "Role",
-                    oldValue: null,
-                    newValue: changeRoleDto.NewRole.ToString());
+            if (result.IsFailure)
+                return result.ToActionResult();
 
-                return Ok(member);
+            var member = result.Value!;
+
+            await LogAuditAsync(
+                _auditService,
+                entityType: "GroupMember",
+                entityId: memberId,
+                action: "RoleChanged",
+                groupId: groupId,
+                propertyName: "Role",
+                oldValue: null,
+                newValue: changeRoleDto.NewRole.ToString());
+
+            return Ok(member);
         }
-
 
         [HttpDelete("{groupId}/members/{memberId}")]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -141,20 +151,21 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> RemoveUserFromGroup(Guid groupId, Guid memberId)
         {
-                var userId = GetUserId();
-                await _groupService.RemoveUserFromGroupAsync(groupId, memberId, userId);
+            var userId = GetUserId();
+            var result = await _groupService.RemoveUserFromGroupAsync(groupId, memberId, userId);
 
+            if (result.IsFailure)
+                return result.ToActionResult();
 
-                await LogAuditAsync(
-                    _auditService,
-                    entityType: "GroupMember",
-                    entityId: memberId,
-                    action: "RemovedFromGroup",
-                    groupId: groupId);
+            await LogAuditAsync(
+                _auditService,
+                entityType: "GroupMember",
+                entityId: memberId,
+                action: "RemovedFromGroup",
+                groupId: groupId);
 
-                return Ok(new { message = "Member removed successfully" });
+            return Ok(new { message = "Member removed successfully" });
         }
-
 
         [HttpPost("{groupId}/leave")]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -162,18 +173,20 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> LeaveGroup(Guid groupId)
         {
-                var userId = GetUserId();
-                await _groupService.LeaveGroupAsync(groupId, userId);
+            var userId = GetUserId();
+            var result = await _groupService.LeaveGroupAsync(groupId, userId);
 
+            if (result.IsFailure)
+                return result.ToActionResult();
 
-                await LogAuditAsync(
-                    _auditService,
-                    entityType: "GroupMember",
-                    entityId: userId,
-                    action: "LeftGroup",
-                    groupId: groupId);
+            await LogAuditAsync(
+                _auditService,
+                entityType: "GroupMember",
+                entityId: userId,
+                action: "LeftGroup",
+                groupId: groupId);
 
-                return Ok(new { message = "Left group successfully" });
+            return Ok(new { message = "Left group successfully" });
         }
     }
 }

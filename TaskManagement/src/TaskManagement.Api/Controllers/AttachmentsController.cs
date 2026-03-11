@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TaskManagement.Api.Extensions;
 using TaskManagement.Core.DTO.Attachments;
 using TaskManagement.Core.Interfaces;
 
@@ -31,22 +33,26 @@ public class AttachmentsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UploadAttachment(Guid taskId, [FromForm] IFormFile file)
     {
-            var userId = GetUserId();
-            var attachment = await _attachmentService.UploadAttachmentAsync(taskId, file, userId);
+        var userId = GetUserId();
+        var result = await _attachmentService.UploadAttachmentAsync(taskId, file, userId);
 
-            await LogAuditAsync(
-                _auditService,
-                entityType: "TaskAttachment",
-                entityId: attachment.Id,
-                action: "Uploaded",
-                propertyName: "FileName",
-                newValue: attachment.FileName);
+        if (result.IsFailure)
+            return result.ToActionResult();
 
-            return CreatedAtAction(
-                nameof(GetAttachment),
-                new { taskId, attachmentId = attachment.Id },
-                attachment);
-        
+        var attachment = result.Value!;
+
+        await LogAuditAsync(
+            _auditService,
+            entityType: "TaskAttachment",
+            entityId: attachment.Id,
+            action: "Uploaded",
+            propertyName: "FileName",
+            newValue: attachment.FileName);
+
+        return CreatedAtAction(
+            nameof(GetAttachment),
+            new { taskId, attachmentId = attachment.Id },
+            attachment);
     }
 
     [HttpGet]
@@ -55,10 +61,9 @@ public class AttachmentsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTaskAttachments(Guid taskId)
     {
-            var userId = GetUserId();
-            var attachments = await _attachmentService.GetTaskAttachmentsAsync(taskId, userId);
-
-            return Ok(attachments);
+        var userId = GetUserId();
+        var result = await _attachmentService.GetTaskAttachmentsAsync(taskId, userId);
+        return result.ToActionResult();
     }
 
     [HttpGet("{attachmentId}")]
@@ -67,10 +72,9 @@ public class AttachmentsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetAttachment(Guid taskId, Guid attachmentId)
     {
-            var userId = GetUserId();
-            var attachment = await _attachmentService.GetAttachmentByIdAsync(attachmentId, userId);
-
-            return Ok(attachment);
+        var userId = GetUserId();
+        var result = await _attachmentService.GetAttachmentByIdAsync(attachmentId, userId);
+        return result.ToActionResult();
     }
 
     [HttpGet("{attachmentId}/download")]
@@ -79,11 +83,14 @@ public class AttachmentsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DownloadAttachment(Guid taskId, Guid attachmentId)
     {
+        var userId = GetUserId();
+        var result = await _attachmentService.DownloadAttachmentAsync(attachmentId, userId);
 
-            var userId = GetUserId();
-            var (fileStream, fileName, contentType) = await _attachmentService.DownloadAttachmentAsync(attachmentId, userId);
+        if (result.IsFailure)
+            return result.ToActionResult();
 
-            return File(fileStream, contentType, fileName);
+        var (fileStream, fileName, contentType) = result.Value!;
+        return File(fileStream, contentType, fileName);
     }
 
     [HttpDelete("{attachmentId}")]
@@ -92,17 +99,18 @@ public class AttachmentsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteAttachment(Guid taskId, Guid attachmentId)
     {
+        var userId = GetUserId();
+        var result = await _attachmentService.DeleteAttachmentAsync(attachmentId, userId);
 
-            var userId = GetUserId();
-            await _attachmentService.DeleteAttachmentAsync(attachmentId, userId);
+        if (result.IsFailure)
+            return result.ToActionResult();
 
-            await LogAuditAsync(
-                _auditService,
-                entityType: "TaskAttachment",
-                entityId: attachmentId,
-                action: "Deleted");
+        await LogAuditAsync(
+            _auditService,
+            entityType: "TaskAttachment",
+            entityId: attachmentId,
+            action: "Deleted");
 
-            return Ok(new { message = "Attachment deleted successfully" });
-
+        return Ok(new { message = "Attachment deleted successfully" });
     }
 }

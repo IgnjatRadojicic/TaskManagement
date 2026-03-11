@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TaskManagement.Api.Extensions;
 using TaskManagement.Api.Interfaces;
 using TaskManagement.Core.DTO.Comments;
 using TaskManagement.Core.Interfaces;
@@ -41,34 +42,41 @@ public class CommentsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AddComment(Guid taskId, [FromBody] CreateCommentDto createCommentDto)
     {
-            var userId = GetUserId();
-            var comment = await _commentService.AddCommentAsync(taskId, createCommentDto, userId);
+        var userId = GetUserId();
+        var commentResult = await _commentService.AddCommentAsync(taskId, createCommentDto, userId);
 
-            await LogAuditAsync(
-                _auditService,
-                entityType: "TaskComment",
-                entityId: comment.Id,
-                action: "Created",
-                propertyName: "Content",
-                newValue: comment.Content);
+        if (commentResult.IsFailure)
+            return commentResult.ToActionResult();
 
-            var task = await _taskService.GetTaskByIdAsync(taskId, userId);
+        var comment = commentResult.Value!;
 
-            var notifications = await _notificationService.NotifyTaskCommentAddedAsync(
-                task.GroupId,
-                task,
-                comment);
+        await LogAuditAsync(
+            _auditService,
+            entityType: "TaskComment",
+            entityId: comment.Id,
+            action: "Created",
+            propertyName: "Content",
+            newValue: comment.Content);
 
-            foreach (var notification in notifications)
-            {
-                await _notificationBroadcaster.BroadcastNotificationAsync(notification);
-            }
+        var taskResult = await _taskService.GetTaskByIdAsync(taskId, userId);
 
-            await _notificationService.TrySendCommentEmailAsync(
-                 task.AssignedToId ?? Guid.Empty, userId, task.Title, comment.Content);
+        if (taskResult.IsFailure)
+            return taskResult.ToActionResult();
 
-            return CreatedAtAction(nameof(GetTaskComments), new { taskId }, comment);
-        
+        var task = taskResult.Value!;
+
+        var notifications = await _notificationService.NotifyTaskCommentAddedAsync(
+            task.GroupId,
+            task,
+            comment);
+
+        foreach (var notification in notifications)
+            await _notificationBroadcaster.BroadcastNotificationAsync(notification);
+
+        await _notificationService.TrySendCommentEmailAsync(
+            task.AssignedToId ?? Guid.Empty, userId, task.Title, comment.Content);
+
+        return CreatedAtAction(nameof(GetTaskComments), new { taskId }, comment);
     }
 
     [HttpGet]
@@ -77,10 +85,9 @@ public class CommentsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTaskComments(Guid taskId)
     {
-            var userId = GetUserId();
-            var comments = await _commentService.GetTaskCommentsAsync(taskId, userId);
-
-            return Ok(comments);
+        var userId = GetUserId();
+        var result = await _commentService.GetTaskCommentsAsync(taskId, userId);
+        return result.ToActionResult();
     }
 
     [HttpPut("{commentId}")]
@@ -90,18 +97,23 @@ public class CommentsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateComment(Guid taskId, Guid commentId, [FromBody] UpdateCommentDto updateCommentDto)
     {
-            var userId = GetUserId();
-            var comment = await _commentService.UpdateCommentAsync(commentId, updateCommentDto, userId);
+        var userId = GetUserId();
+        var result = await _commentService.UpdateCommentAsync(commentId, updateCommentDto, userId);
 
-            await LogAuditAsync(
-                _auditService,
-                entityType: "TaskComment",
-                entityId: commentId,
-                action: "Updated",
-                propertyName: "Content",
-                newValue: comment.Content);
+        if (result.IsFailure)
+            return result.ToActionResult();
 
-            return Ok(comment);
+        var comment = result.Value!;
+
+        await LogAuditAsync(
+            _auditService,
+            entityType: "TaskComment",
+            entityId: commentId,
+            action: "Updated",
+            propertyName: "Content",
+            newValue: comment.Content);
+
+        return Ok(comment);
     }
 
     [HttpDelete("{commentId}")]
@@ -110,15 +122,18 @@ public class CommentsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteComment(Guid taskId, Guid commentId)
     {
-            var userId = GetUserId();
-            await _commentService.DeleteCommentAsync(commentId, userId);
+        var userId = GetUserId();
+        var result = await _commentService.DeleteCommentAsync(commentId, userId);
 
-            await LogAuditAsync(
-                _auditService,
-                entityType: "TaskComment",
-                entityId: commentId,
-                action: "Deleted");
+        if (result.IsFailure)
+            return result.ToActionResult();
 
-            return Ok(new { message = "Comment deleted successfully" });
+        await LogAuditAsync(
+            _auditService,
+            entityType: "TaskComment",
+            entityId: commentId,
+            action: "Deleted");
+
+        return Ok(new { message = "Comment deleted successfully" });
     }
 }

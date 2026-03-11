@@ -1,8 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TaskManagement.Api.Extensions;
 using TaskManagement.Api.Interfaces;
 using TaskManagement.Core.DTO.Tasks;
 using TaskManagement.Core.Interfaces;
+
 namespace TaskManagement.Api.Controllers
 {
     [Authorize]
@@ -21,7 +23,7 @@ namespace TaskManagement.Api.Controllers
             IAuditService auditService,
             INotificationBroadcaster notificationBroadcaster,
             INotificationService notificationService,
-        ILogger<TaskController> logger)
+            ILogger<TaskController> logger)
         {
             _taskService = taskService;
             _notificationBroadcaster = notificationBroadcaster;
@@ -35,34 +37,36 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-
         public async Task<IActionResult> CreateTask(Guid groupId, [FromBody] CreateTaskDto createTaskDto)
         {
-     
-                var userId = GetUserId();
-                var task = await _taskService.CreateTaskAsync(groupId, createTaskDto, userId);
+            var userId = GetUserId();
+            var result = await _taskService.CreateTaskAsync(groupId, createTaskDto, userId);
 
-                await LogAuditAsync(
-                    _auditService,
-                    entityType: "TaskItem",
-                    entityId: task.Id,
-                    action: "Created",
-                    groupId: groupId);
+            if (result.IsFailure)
+                return result.ToActionResult();
 
+            var task = result.Value!;
 
+            await LogAuditAsync(
+                _auditService,
+                entityType: "TaskItem",
+                entityId: task.Id,
+                action: "Created",
+                groupId: groupId);
+
+            if (task.AssignedToId.HasValue)
+            {
                 var notification = await _notificationService.NotifyTaskCreatedAsync(task.AssignedToId.Value, task);
-
                 if (notification != null)
-                {
                     await _notificationBroadcaster.BroadcastNotificationAsync(notification);
-                }
+            }
 
-                return CreatedAtAction(
-                    nameof(GetTaskById),
-                    new { taskId = task.Id },
-                    task);
-
+            return CreatedAtAction(
+                nameof(GetTaskById),
+                new { taskId = task.Id },
+                task);
         }
+
         [HttpGet("groups/{groupId}")]
         [ProducesResponseType(typeof(List<TaskDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -74,20 +78,19 @@ namespace TaskManagement.Api.Controllers
             [FromQuery] bool? isOverDue = null,
             [FromQuery] string? searchTerm = null)
         {
-                var userId = GetUserId();
+            var userId = GetUserId();
 
-                var filter = new TaskFilterDto
-                {
-                    StatusId = statusId,
-                    PriorityId = priorityId,
-                    AssignedToUserId = assignedToUserId,
-                    IsOverDue = isOverDue,
-                    SearchTerm = searchTerm
-                };
+            var filter = new TaskFilterDto
+            {
+                StatusId = statusId,
+                PriorityId = priorityId,
+                AssignedToUserId = assignedToUserId,
+                IsOverDue = isOverDue,
+                SearchTerm = searchTerm
+            };
 
-                var tasks = await _taskService.GetGroupTasksAsync(groupId, filter, userId);
-
-                return Ok(tasks);
+            var result = await _taskService.GetGroupTasksAsync(groupId, filter, userId);
+            return result.ToActionResult();
         }
 
         [HttpGet("{taskId}")]
@@ -96,11 +99,9 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetTaskById(Guid taskId)
         {
-                var userId = GetUserId();
-                var task = await _taskService.GetTaskByIdAsync(taskId, userId);
-
-                return Ok(task);
-
+            var userId = GetUserId();
+            var result = await _taskService.GetTaskByIdAsync(taskId, userId);
+            return result.ToActionResult();
         }
 
         [HttpPut("{taskId}")]
@@ -110,26 +111,26 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> UpdateTask(Guid taskId, [FromBody] UpdateTaskDto updateTaskDto)
         {
-                var userId = GetUserId();
-                var task = await _taskService.UpdateTaskAsync(taskId, updateTaskDto, userId);
+            var userId = GetUserId();
+            var result = await _taskService.UpdateTaskAsync(taskId, updateTaskDto, userId);
 
-                await LogAuditAsync(
-                    _auditService,
-                    entityType: "TaskItem",
-                    entityId: taskId,
-                    action: "Updated",
-                    groupId: task.GroupId);
+            if (result.IsFailure)
+                return result.ToActionResult();
 
-                var notification = await _notificationService.NotifyTaskUpdatedAsync(task.GroupId, task);
+            var task = result.Value!;
 
-                if (notification != null)
-                {
-                    await _notificationBroadcaster.BroadcastNotificationAsync(notification);
-                }
+            await LogAuditAsync(
+                _auditService,
+                entityType: "TaskItem",
+                entityId: taskId,
+                action: "Updated",
+                groupId: task.GroupId);
 
+            var notification = await _notificationService.NotifyTaskUpdatedAsync(task.GroupId, task);
+            if (notification != null)
+                await _notificationBroadcaster.BroadcastNotificationAsync(notification);
 
-                return Ok(task);
-
+            return Ok(task);
         }
 
         [HttpPut("{taskId}/status")]
@@ -139,31 +140,33 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> ChangeTaskStatus(Guid taskId, [FromBody] ChangeTaskStatusDto statusDto)
         {
-                var userId = GetUserId();
-                var task = await _taskService.ChangeTaskStatusAsync(taskId, statusDto, userId);
+            var userId = GetUserId();
+            var result = await _taskService.ChangeTaskStatusAsync(taskId, statusDto, userId);
 
-                await LogAuditAsync(
-                    _auditService,
-                    entityType: "TaskItem",
-                    entityId: taskId,
-                    action: "StatusChanged",
-                    propertyName: "StatusId",
-                    oldValue: task.OldStatus,
-                    newValue: task.NewStatus);
+            if (result.IsFailure)
+                return result.ToActionResult();
 
-                var notifications = await _notificationService.NotifyTaskStatusChangedAsync(
-                    task.Task.GroupId,
-                    task.Task,
-                    task.OldStatus,
-                    task.NewStatus);
+            var statusChange = result.Value!;
 
-                foreach (var notification in notifications)
-                {
-                    await _notificationBroadcaster.BroadcastNotificationAsync(notification);
-                }
+            await LogAuditAsync(
+                _auditService,
+                entityType: "TaskItem",
+                entityId: taskId,
+                action: "StatusChanged",
+                propertyName: "StatusId",
+                oldValue: statusChange.OldStatus,
+                newValue: statusChange.NewStatus);
 
-                return Ok(task);
-            
+            var notifications = await _notificationService.NotifyTaskStatusChangedAsync(
+                statusChange.Task.GroupId,
+                statusChange.Task,
+                statusChange.OldStatus,
+                statusChange.NewStatus);
+
+            foreach (var notification in notifications)
+                await _notificationBroadcaster.BroadcastNotificationAsync(notification);
+
+            return Ok(statusChange);
         }
 
         [HttpPut("{taskId}/priority")]
@@ -173,67 +176,77 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> ChangeTaskPriority(Guid taskId, [FromBody] int newPriorityId)
         {
-                var userId = GetUserId();
-                var task = await _taskService.ChangeTaskPriorityAsync(taskId, newPriorityId, userId);
+            var userId = GetUserId();
+            var result = await _taskService.ChangeTaskPriorityAsync(taskId, newPriorityId, userId);
 
-                await LogAuditAsync(
-                    _auditService,
-                    entityType: "TaskItem",
-                    entityId: taskId,
-                    action: "PriorityChanged",
-                    groupId: task.Task.GroupId,
-                    propertyName: "Priority",
-                    oldValue: task.OldPriority,
-                    newValue: task.NewPriority);
+            if (result.IsFailure)
+                return result.ToActionResult();
 
-                if (task.Task.AssignedToId.HasValue)
-                {
-                    var notification = await _notificationService.NotifyTaskPriorityChangedAsync(
-                        task.Task.GroupId,
-                        task.Task,
-                        task.OldPriority,
-                        task.NewPriority);
+            var priorityChange = result.Value!;
 
-                    if (notification != null)
-                    {
-                        await _notificationBroadcaster.BroadcastNotificationAsync(notification);
-                    }
-                }
+            await LogAuditAsync(
+                _auditService,
+                entityType: "TaskItem",
+                entityId: taskId,
+                action: "PriorityChanged",
+                groupId: priorityChange.Task.GroupId,
+                propertyName: "Priority",
+                oldValue: priorityChange.OldPriority,
+                newValue: priorityChange.NewPriority);
 
-                return Ok(task);
+            if (priorityChange.Task.AssignedToId.HasValue)
+            {
+                var notification = await _notificationService.NotifyTaskPriorityChangedAsync(
+                    priorityChange.Task.GroupId,
+                    priorityChange.Task,
+                    priorityChange.OldPriority,
+                    priorityChange.NewPriority);
+
+                if (notification != null)
+                    await _notificationBroadcaster.BroadcastNotificationAsync(notification);
+            }
+
+            return Ok(priorityChange);
         }
 
         [HttpPost("{taskId}/assign")]
         public async Task<IActionResult> AssignTask(Guid taskId, [FromBody] AssignTaskDto assignDto)
         {
-                var userId = GetUserId();
+            var userId = GetUserId();
 
-                await _taskService.AssignTaskAsync(taskId, assignDto, userId);
-                var task = await _taskService.GetTaskByIdAsync(taskId, userId);
+            var assignResult = await _taskService.AssignTaskAsync(taskId, assignDto, userId);
+            if (assignResult.IsFailure)
+                return assignResult.ToActionResult();
 
-                await LogAuditAsync(
-                    _auditService,
-                    entityType: "TaskItem",
-                    entityId: taskId,
-                    action: "Assigned",
-                    groupId: task.GroupId,
-                    propertyName: "AssignedTo",
-                    newValue: task.AssignedToUserName);
+            var taskResult = await _taskService.GetTaskByIdAsync(taskId, userId);
+            if (taskResult.IsFailure)
+                return taskResult.ToActionResult();
 
-                var notification = await _notificationService.NotifyTaskAssignedAsync(assignDto.UserId, task);
+            var task = taskResult.Value!;
 
-                _logger.LogInformation("NotifyTaskAssignedAsync returned: {NotificationId}", notification?.Id);
+            await LogAuditAsync(
+                _auditService,
+                entityType: "TaskItem",
+                entityId: taskId,
+                action: "Assigned",
+                groupId: task.GroupId,
+                propertyName: "AssignedTo",
+                newValue: task.AssignedToUserName);
 
-                if (notification != null)
-                {
-                    await _notificationBroadcaster.BroadcastNotificationAsync(notification);
-                    _logger.LogInformation("Broadcast complete");
-                }
+            var notification = await _notificationService.NotifyTaskAssignedAsync(assignDto.UserId, task);
 
-            await _notificationService.TrySendTaskAssignmentEmailAsync(assignDto.UserId, task.Title, task.GroupName, task.CreatedByUserName);
+            _logger.LogInformation("NotifyTaskAssignedAsync returned: {NotificationId}", notification?.Id);
 
-                return Ok(new { message = "Task assigned successfully" });
-            
+            if (notification != null)
+            {
+                await _notificationBroadcaster.BroadcastNotificationAsync(notification);
+                _logger.LogInformation("Broadcast complete");
+            }
+
+            await _notificationService.TrySendTaskAssignmentEmailAsync(
+                assignDto.UserId, task.Title, task.GroupName, task.CreatedByUserName);
+
+            return Ok(new { message = "Task assigned successfully" });
         }
 
         [HttpPost("{taskId}/unassign")]
@@ -242,22 +255,28 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> UnassignTask(Guid taskId)
         {
-                var userId = GetUserId();
-                var task = await _taskService.GetTaskByIdAsync(taskId, userId);
+            var userId = GetUserId();
 
-                await _taskService.UnassignTaskAsync(taskId, userId);
+            var taskResult = await _taskService.GetTaskByIdAsync(taskId, userId);
+            if (taskResult.IsFailure)
+                return taskResult.ToActionResult();
 
-                await LogAuditAsync(
-                    _auditService,
-                    entityType: "TaskItem",
-                    entityId: taskId,
-                    action: "Unassigned",
-                    groupId: task.GroupId,
-                    propertyName: "AssignedTo",
-                    oldValue: task.AssignedToUserName);
+            var task = taskResult.Value!;
 
-                return Ok(new { message = "Task unassigned successfully" });
-            
+            var unassignResult = await _taskService.UnassignTaskAsync(taskId, userId);
+            if (unassignResult.IsFailure)
+                return unassignResult.ToActionResult();
+
+            await LogAuditAsync(
+                _auditService,
+                entityType: "TaskItem",
+                entityId: taskId,
+                action: "Unassigned",
+                groupId: task.GroupId,
+                propertyName: "AssignedTo",
+                oldValue: task.AssignedToUserName);
+
+            return Ok(new { message = "Task unassigned successfully" });
         }
 
         [HttpDelete("{taskId}")]
@@ -266,25 +285,26 @@ namespace TaskManagement.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> DeleteTask(Guid taskId)
         {
+            var userId = GetUserId();
 
-                var userId = GetUserId();
-                var task = await _taskService.GetTaskByIdAsync(taskId, userId);
+            var taskResult = await _taskService.GetTaskByIdAsync(taskId, userId);
+            if (taskResult.IsFailure)
+                return taskResult.ToActionResult();
 
-                await _taskService.DeleteTaskAsync(taskId, userId);
+            var task = taskResult.Value!;
 
-                await LogAuditAsync(
-                    _auditService,
-                    entityType: "TaskItem",
-                    entityId: taskId,
-                    action: "Deleted",
-                    groupId: task.GroupId);
+            var deleteResult = await _taskService.DeleteTaskAsync(taskId, userId);
+            if (deleteResult.IsFailure)
+                return deleteResult.ToActionResult();
 
-                return Ok(new { message = "Task deleted successfully" });
-            
+            await LogAuditAsync(
+                _auditService,
+                entityType: "TaskItem",
+                entityId: taskId,
+                action: "Deleted",
+                groupId: task.GroupId);
 
+            return Ok(new { message = "Task deleted successfully" });
         }
     }
-
 }
-
-    

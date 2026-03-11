@@ -1,10 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Options;
+using TaskManagement.Api.Extensions;
 using TaskManagement.Api.Hubs;
 using TaskManagement.Core.DTO.Notifications;
-using TaskManagement.Core.Entities;
 using TaskManagement.Core.Interfaces;
 
 namespace TaskManagement.Api.Controllers;
@@ -28,62 +27,59 @@ public class NotificationsController : BaseApiController
         _logger = logger;
     }
 
-
     [HttpGet]
     [ProducesResponseType(typeof(List<NotificationDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetNotifications([FromQuery] bool unreadOnly = false)
     {
-            var userId = GetUserId();
-            var notifications = await _notificationService.GetUserNotificationsAsync(userId, unreadOnly);
-
-            return Ok(notifications);
+        var userId = GetUserId();
+        var result = await _notificationService.GetUserNotificationsAsync(userId, unreadOnly);
+        return result.ToActionResult();
     }
-
 
     [HttpGet("unread-count")]
     [ProducesResponseType(typeof(UnreadCountDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUnreadCount()
     {
-
-            var userId = GetUserId();
-            var count = await _notificationService.GetUnreadCountAsync(userId);
-
-            return Ok(new UnreadCountDto { Count = count });
+        var userId = GetUserId();
+        var result = await _notificationService.GetUnreadCountAsync(userId);
+        return result.ToActionResult();
     }
-
 
     [HttpPatch("{notificationId}/read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkAsRead(Guid notificationId)
     {
-            var userId = GetUserId();
-            await _notificationService.MarkAsReadAsync(notificationId, userId);
+        var userId = GetUserId();
+        var result = await _notificationService.MarkAsReadAsync(notificationId, userId);
+        if (result.IsFailure)
+            return result.ToActionResult();
 
-            return Ok(new { message = "Notification marked as read" });
+        return Ok(new { message = "Notification marked as read" });
     }
-
 
     [HttpPut("read-all")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> MarkAllAsRead()
     {
-            var userId = GetUserId();
-            await _notificationService.MarkAllAsReadAsync(userId);
+        var userId = GetUserId();
+        var result = await _notificationService.MarkAllAsReadAsync(userId);
+        if (result.IsFailure)
+            return result.ToActionResult();
 
-            return Ok(new { message = "All notifications marked as read" });
+        return Ok(new { message = "All notifications marked as read" });
     }
-
 
     [HttpDelete("{notificationId}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteNotification(Guid notificationId)
     {
-            var userId = GetUserId();
-            await _notificationService.DeleteNotificationAsync(notificationId, userId);
+        var userId = GetUserId();
+        var result = await _notificationService.DeleteNotificationAsync(notificationId, userId);
+        if (result.IsFailure)
+            return result.ToActionResult();
 
-            return Ok(new { message = "Notification deleted" });
-        
+        return Ok(new { message = "Notification deleted" });
     }
 }

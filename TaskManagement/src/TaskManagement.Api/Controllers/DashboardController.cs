@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TaskManagement.Api.Extensions;
 using TaskManagement.Core.DTO.Dashboard;
 using TaskManagement.Core.Interfaces;
 
@@ -22,8 +23,8 @@ namespace TaskManagement.Api.Controllers
         public async Task<IActionResult> GetPersonalDashboard()
         {
             var userId = GetUserId();
-            var dashboard = await _dashboardService.GetPersonalDashboardAsync(userId);
-            return Ok(dashboard);
+            var result = await _dashboardService.GetPersonalDashboardAsync(userId);
+            return result.ToActionResult();
         }
 
         [HttpGet("field")]
@@ -31,8 +32,8 @@ namespace TaskManagement.Api.Controllers
         public async Task<IActionResult> GetFieldData()
         {
             var userId = GetUserId();
-            var trees = await _dashboardService.GetFieldDataAsync(userId);
-            return Ok(trees);
+            var result = await _dashboardService.GetFieldDataAsync(userId);
+            return result.ToActionResult();
         }
 
         [HttpGet("groups/{groupId}")]
@@ -42,8 +43,8 @@ namespace TaskManagement.Api.Controllers
         public async Task<IActionResult> GetGroupStatistics(Guid groupId)
         {
             var userId = GetUserId();
-            var statistics = await _dashboardService.GetGroupStatisticsAsync(groupId, userId);
-            return Ok(statistics);
+            var result = await _dashboardService.GetGroupStatisticsAsync(groupId, userId);
+            return result.ToActionResult();
         }
     }
 }

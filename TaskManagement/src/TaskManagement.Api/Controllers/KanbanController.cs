@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TaskManagement.Api.Extensions;
 using TaskManagement.Core.DTO.Kanban;
 using TaskManagement.Core.Interfaces;
 
@@ -13,6 +14,7 @@ namespace TaskManagement.Api.Controllers
         private readonly ITaskService _taskService;
         private readonly IAuditService _auditService;
         private readonly IKanbanBroadcaster _kanbanBroadcaster;
+
         public KanbanController(ITaskService taskService, IAuditService auditService, IKanbanBroadcaster kanbanBroadcaster)
         {
             _taskService = taskService;
@@ -26,8 +28,8 @@ namespace TaskManagement.Api.Controllers
         public async Task<IActionResult> GetBoard(Guid groupId)
         {
             var userId = GetUserId();
-            var board = await _taskService.GetKanbanBoardAsync(groupId, userId);
-            return Ok(board);
+            var result = await _taskService.GetKanbanBoardAsync(groupId, userId);
+            return result.ToActionResult();
         }
 
         [HttpPut("{taskId}/move")]
@@ -38,11 +40,18 @@ namespace TaskManagement.Api.Controllers
         public async Task<IActionResult> MoveTask(Guid taskId, [FromBody] MoveTaskDto moveDto)
         {
             var userId = GetUserId();
-            var task = await _taskService.GetTaskByIdAsync(taskId, userId);
+
+            var taskResult = await _taskService.GetTaskByIdAsync(taskId, userId);
+            if (taskResult.IsFailure)
+                return taskResult.ToActionResult();
+
+            var task = taskResult.Value!;
             var oldStatusId = task.StatusId;
 
-            await _taskService.MoveTaskAsync(taskId, moveDto, userId);
-            
+            var moveResult = await _taskService.MoveTaskAsync(taskId, moveDto, userId);
+            if (moveResult.IsFailure)
+                return moveResult.ToActionResult();
+
             await LogAuditAsync(
                 _auditService,
                 entityType: "TaskItem",
@@ -50,9 +59,6 @@ namespace TaskManagement.Api.Controllers
                 action: "Moved",
                 propertyName: "StatusId",
                 newValue: moveDto.NewStatusId.ToString());
-
-            
-
 
             await _kanbanBroadcaster.BroadcastTaskMovedAsync(task.GroupId, taskId, oldStatusId, moveDto, userId);
 

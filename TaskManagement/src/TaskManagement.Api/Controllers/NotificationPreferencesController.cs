@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TaskManagement.Api.Extensions;
 using TaskManagement.Core.DTO.Notifications;
 using TaskManagement.Core.Interfaces;
 
@@ -21,14 +22,13 @@ public class NotificationPreferencesController : BaseApiController
         _logger = logger;
     }
 
-
     [HttpGet]
     [ProducesResponseType(typeof(List<NotificationPreferenceDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPreferences()
     {
-            var userId = GetUserId();
-            var preferences = await _notificationService.GetUserPreferencesAsync(userId);
-            return Ok(preferences);
+        var userId = GetUserId();
+        var result = await _notificationService.GetUserPreferencesAsync(userId);
+        return result.ToActionResult();
     }
 
     [HttpPut]
@@ -36,8 +36,11 @@ public class NotificationPreferencesController : BaseApiController
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> SavePreferences([FromBody] UpdateNotificationPreferencesDto dto)
     {
-            var userId = GetUserId();
-            await _notificationService.SaveUserPreferencesAsync(userId, dto);
-            return Ok(new { message = "Notification preferences saved successfully" });
+        var userId = GetUserId();
+        var result = await _notificationService.SaveUserPreferencesAsync(userId, dto);
+        if (result.IsFailure)
+            return result.ToActionResult();
+
+        return Ok(new { message = "Notification preferences saved successfully" });
     }
 }
