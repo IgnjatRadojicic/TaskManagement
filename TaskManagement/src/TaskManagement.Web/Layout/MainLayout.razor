@@ -1,16 +1,24 @@
 ﻿@inherits LayoutComponentBase
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
+<MudLayout>
+    <MudAppBar Elevation="1" Dense="true">
+        <MudImage Src="images/logo.png" Alt="Plantitask" Height="32" Class="mr-2" />
+        <MudText Typo="Typo.h5" Style="color:#9CC103; font-family:'Sora',sans-serif;">
+            PLANTITASK
+        </MudText>
+        <MudSpacer />
+        <AuthorizeView>
+            <Authorized>
+                <MudText Typo="Typo.body2" Class="mr-4">
+                    @context.User.Identity?.Name
+                </MudText>
+            </Authorized>
+        </AuthorizeView>
+    </MudAppBar>
 
-        <article class="content px-4">
+    <MudMainContent Class="pt-16">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6">
             @Body
-        </article>
-    </main>
-</div>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
