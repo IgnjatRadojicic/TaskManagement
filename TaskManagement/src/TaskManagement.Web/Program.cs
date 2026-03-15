@@ -12,7 +12,7 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
 var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"]
-    ?? "https://localhost:7201";
+    ?? "http://localhost:5212";
 
 // Register the DelegatingHandler
 builder.Services.AddScoped<AuthTokenHandler>();

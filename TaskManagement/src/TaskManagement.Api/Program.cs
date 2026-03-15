@@ -80,13 +80,13 @@ builder.Services.AddRateLimiter(options =>
     options.AddFixedWindowLimiter("auth", opt =>
     {
         opt.Window = TimeSpan.FromMinutes(1);
-        opt.PermitLimit = 10;
+        opt.PermitLimit = 15;
     });
 
     options.AddFixedWindowLimiter("verification", opt =>
     {
         opt.Window = TimeSpan.FromMinutes(5);
-        opt.PermitLimit = 5;
+        opt.PermitLimit = 10;
     });
 
     options.AddFixedWindowLimiter("general", opt =>
