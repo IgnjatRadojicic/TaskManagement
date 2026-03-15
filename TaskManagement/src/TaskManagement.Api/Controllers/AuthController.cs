@@ -147,7 +147,6 @@ namespace TaskManagement.Api.Controllers
         }
 
         [HttpPost("send-verification")]
-        [EnableRateLimiting("verification")]
 
         public async Task<IActionResult> SendVerification([FromBody] SendVerificationRequest dto)
         {

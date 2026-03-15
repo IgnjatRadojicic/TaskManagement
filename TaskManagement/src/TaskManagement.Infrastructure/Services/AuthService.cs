@@ -181,14 +181,6 @@ namespace TaskManagement.Infrastructure.Services
         {
             var exists = await _context.Users
                 .AnyAsync(u => u.Email == email);
-
-            if (!exists)
-            {
-                var sendResult = await SendVerificationCodeAsync(email);
-                if (sendResult.IsFailure)
-                    _logger.LogWarning("Failed to send verification code to {Email}: {Error}", email, sendResult.Error!.Message);
-            }
-
             return new CheckEmailResponseDto { Exists = exists };
         }
 
