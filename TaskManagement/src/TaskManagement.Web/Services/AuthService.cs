@@ -7,10 +7,9 @@ using TaskManagement.Web.Models;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 namespace TaskManagement.Web.Services
 {
-    public class AuthService : IAuthService
+    public class AuthService : BaseApiService, IAuthService
     {
 
-        private readonly HttpClient _http;
         private readonly ILocalStorageService _localStorage;
         private readonly CustomAuthStateProvider _authStateProvider;
 
@@ -20,9 +19,8 @@ namespace TaskManagement.Web.Services
         public AuthService(
             HttpClient http,
             ILocalStorageService localStorage,
-            CustomAuthStateProvider authStateProvider)
+            CustomAuthStateProvider authStateProvider) : base(http)
         {
-            _http = http;
             _localStorage = localStorage;
             _authStateProvider = authStateProvider;
         }
@@ -71,7 +69,7 @@ namespace TaskManagement.Web.Services
             {
                 try
                 {
-                    await _http.PostAsJsonAsync("api/auth/logout",
+                    await Http.PostAsJsonAsync("api/auth/logout",
                         new RefreshTokenRequest { RefreshToken = refreshToken });
                 }
                 catch { }
@@ -126,47 +124,6 @@ namespace TaskManagement.Web.Services
         public async Task<string?> GetTokenAsync()
         {
             return await _localStorage.GetItemAsStringAsync(TokenKey);
-        }
-
-
-        private async Task<ServiceResult<T>> PostAsync<T>(string url, object payload)
-        {
-            try
-            {
-                var response = await _http.PostAsJsonAsync(url, payload);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    if (response.StatusCode == HttpStatusCode.NoContent)
-                        return ServiceResult<T>.Ok(default!);
-
-                    var data = await response.Content.ReadFromJsonAsync<T>();
-                    return data != null
-                        ? ServiceResult<T>.Ok(data)
-                        : ServiceResult<T>.Fail("Could not read server response.");
-                }
-
-                var error = await ReadError(response);
-                return ServiceResult<T>.Fail(error);
-            }
-            catch (HttpRequestException)
-            {
-                return ServiceResult<T>.Fail(
-                    "Cannot reach the server. Please check your connection.");
-            }
-        }
-
-        private static async Task<string> ReadError(HttpResponseMessage response)
-        {
-            try
-            {
-                var apiError = await response.Content.ReadFromJsonAsync<ApiError>();
-                return apiError?.Message ?? $"Request failed ({(int)response.StatusCode})";
-            }
-            catch
-            {
-                return $"Request failed ({(int)response.StatusCode})";
-            }
         }
 
         private async Task StoreTokensAndNotify(AuthResponse auth)
