@@ -9,7 +9,7 @@ public class AuthTokenHandler : DelegatingHandler
 {
     private readonly ILocalStorageService _localStorage;
     private readonly CustomAuthStateProvider _authStateProvider;
-    private bool _isRefreshing;
+    private readonly SemaphoreSlim  _refreshLock = new(1,1);
 
     public AuthTokenHandler(
         ILocalStorageService localStorage,
@@ -35,7 +35,7 @@ public class AuthTokenHandler : DelegatingHandler
 
         var response = await base.SendAsync(request, cancellationToken);
 
-        if (response.StatusCode == HttpStatusCode.Unauthorized && !_isRefreshing)
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
             var refreshed = await TryRefreshTokenAsync(cancellationToken);
 
@@ -77,9 +77,15 @@ public class AuthTokenHandler : DelegatingHandler
 
     private async Task<bool> TryRefreshTokenAsync(CancellationToken cancellationToken)
     {
-        _isRefreshing = true;
+        var tokenBeforeLock = await _localStorage.GetItemAsStringAsync("authToken");
+        await _refreshLock.WaitAsync(cancellationToken);
+
         try
         {
+            var currentToken = await _localStorage.GetItemAsStringAsync("authToken");
+            if (tokenBeforeLock != currentToken)
+                return true;
+
             var refreshToken = await _localStorage.GetItemAsStringAsync("refreshToken");
             if (string.IsNullOrEmpty(refreshToken))
                 return false;
@@ -112,7 +118,7 @@ public class AuthTokenHandler : DelegatingHandler
         }
         finally
         {
-            _isRefreshing = false;
+            _refreshLock.Release();
         }
     }
 
