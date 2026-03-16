@@ -13,5 +13,6 @@ namespace TaskManagement.Core.DTO.Dashboard
         public int MemberCount { get; set; }
         public int TotalTasks { get; set; }
         public int CompletedTasks { get; set; }
+
     }
 }
