@@ -69,6 +69,23 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
         ClockSkew = TimeSpan.Zero // Remove default 5 minute clock skew
     };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+
+            
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+            {
+                context.Token = accessToken;
+            }
+
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization();
@@ -109,6 +126,8 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationBroadcaster, SignalRNotificationBroadcaster>();
 builder.Services.AddScoped<IKanbanBroadcaster, KanbanBroadcaster>();
 builder.Services.AddScoped<IBackgroundJobService, BackgroundJobService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<ITreeProgressBroadcaster, TreeProgressBroadcaster>();
 builder.Services.AddScoped<NotificationBackgroundJob>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.Configure<FileStorageSettings>(
@@ -221,7 +240,6 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
     Authorization = new[] { new HangfireAuthorizationFilter() }
 });
 
-app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<KanbanHub>("/hubs/kanban");
 app.MapControllers();
