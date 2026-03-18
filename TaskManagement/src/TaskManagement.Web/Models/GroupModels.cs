@@ -1,6 +1,6 @@
 ﻿namespace TaskManagement.Web.Models;
 
-// ===== Group Models =====
+// ===== Group Dtos =====
 
 public class GroupDto
 {
@@ -71,7 +71,59 @@ public class FieldTreeDto
     public int CompletedTasks { get; set; }
 }
 
-public class FieldTreeViewModel
+
+public class GroupStatisticsModel
+{
+    public Guid GroupId { get; set; }
+    public string GroupName { get; set; } = string.Empty;
+    public double CompletionPercentage { get; set; }
+    public TreeStage CurrentTreeStage { get; set; }
+
+    public int TotalTasks { get; set; }
+    public int CompletedTasks { get; set; }
+    public int InProgressTasks { get; set; }
+    public int NotStartedTasks { get; set; }
+    public int UnderReviewTasks { get; set; }
+    public int OverdueTasks { get; set; }
+    public int MemberCount { get; set; }
+    public double? AverageCompletionDays { get; set; }
+
+    public List<StatusCountModel> TasksByStatus { get; set; } = new();
+    public List<PriorityCountModel> TasksByPriority { get; set; } = new();
+    public List<MemberWorkloadModel> MemberWorkload { get; set; } = new();
+    public List<TrendPointModel> CompletionTrend { get; set; } = new();
+}
+
+public class StatusCountModel
+{
+    public string StatusName { get; set; } = string.Empty;
+    public string? Color { get; set; }
+    public int Count { get; set; }
+}
+
+public class PriorityCountModel
+{
+    public string PriorityName { get; set; } = string.Empty;
+    public string? Color { get; set; }
+    public int Count { get; set; }
+}
+
+public class MemberWorkloadModel
+{
+    public string UserName { get; set; } = string.Empty;
+    public int AssignedCount { get; set; }
+    public int CompletedCount { get; set; }
+    public int OverdueCount { get; set; }
+}
+
+public class TrendPointModel
+{
+    public DateTime Date { get; set; }
+    public int CompletedCount { get; set; }
+}
+
+
+public class FieldTreeViewDto
 {
     public Guid GroupId { get; set; }
     public string GroupName { get; set; } = string.Empty;
@@ -83,7 +135,7 @@ public class FieldTreeViewModel
     public double X { get; set; }
     public double Y { get; set; }
 
-    public static FieldTreeViewModel FromDto(FieldTreeDto dto, double x, double y) => new()
+    public static FieldTreeViewDto FromDto(FieldTreeDto dto, double x, double y) => new()
     {
         GroupId = dto.GroupId,
         GroupName = dto.GroupName,
