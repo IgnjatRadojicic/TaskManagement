@@ -428,7 +428,7 @@ window.fieldEngine = {
             tree.sprite.width = newSize;
             tree.sprite.height = newSize;
 
-  
+
             tree.container.scale.set(1.2);
             setTimeout(() => { if (tree.container) tree.container.scale.set(1); }, 300);
         } catch (err) {

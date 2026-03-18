@@ -291,7 +291,12 @@
     [JSInvokable]
     public void OnTreeClicked(string groupId)
     {
-        InvokeAsync(() => Navigation.NavigateTo($"/groups/{groupId}"));
+    var tree = _fieldTrees.FirstOrDefault(t => t.GroupId.ToString() == groupId);
+    var slug = tree != null
+        ? Uri.EscapeDataString(tree.GroupName.ToLower().Replace(" ", "-"))
+        : groupId;
+
+    InvokeAsync(() => Navigation.NavigateTo($"/groups/{slug}/{groupId}"));
     }
 
     [JSInvokable]
@@ -344,7 +349,7 @@
         await JS.InvokeVoidAsync("fieldEngine.addTreeLive", json);
     }
 
-    // ---- Cleanup ----
+ 
 
     public async ValueTask DisposeAsync()
     {
