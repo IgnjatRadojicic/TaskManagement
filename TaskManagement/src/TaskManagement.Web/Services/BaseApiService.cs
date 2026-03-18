@@ -94,6 +94,30 @@ public abstract class BaseApiService
         }
     }
 
+
+    protected async Task<ServiceResult<T>> PatchAsync<T>(string url, object? data = null)
+    {
+        try
+        {
+            var response = data is not null
+                ? await Http.PatchAsJsonAsync(url, data)
+                : await Http.PatchAsync(url, null);
+
+            if(!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                return ServiceResult<T>.Fail(error);
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<T>();
+            return ServiceResult<T>.Ok(result!);
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<T>.Fail(ex.Message);
+        }
+    }
+
     protected async Task<ServiceResult<T>> DeleteAsync<T>(string url)
     {
         try
