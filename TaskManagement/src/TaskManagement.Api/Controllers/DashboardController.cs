@@ -20,7 +20,7 @@ namespace TaskManagement.Api.Controllers
             _dashboardService = dashboardService;
         }
 
-        [HttpGet]
+        [HttpGet("personal")]
         [ProducesResponseType(typeof(PersonalDashboardDto), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPersonalDashboard()
         {

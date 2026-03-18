@@ -1,10 +1,11 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TaskManagement.Api.Extensions;
 using TaskManagement.Api.Interfaces;
+using TaskManagement.Api.Services;
 using TaskManagement.Core.DTO.Tasks;
 using TaskManagement.Core.Interfaces;
-using Microsoft.AspNetCore.RateLimiting;
 
 namespace TaskManagement.Api.Controllers
 {
@@ -20,6 +21,8 @@ namespace TaskManagement.Api.Controllers
         private readonly INotificationService _notificationService;
         private readonly INotificationBroadcaster _notificationBroadcaster;
         private readonly ITreeProgressBroadcaster _treeBroadcaster;
+        private readonly IKanbanBroadcaster _kanbanBroadcaster;
+        private readonly IKanbanTreeBroadcaster _treeKanbanBroadcaster;
 
 
         public TaskController(
@@ -28,12 +31,16 @@ namespace TaskManagement.Api.Controllers
             INotificationBroadcaster notificationBroadcaster,
             INotificationService notificationService,
             ITreeProgressBroadcaster treeBroadcaster,
+            IKanbanTreeBroadcaster treeKanbanBroadcaster,
+            IKanbanBroadcaster kanbanBroadcaster,
             ILogger<TaskController> logger)
         {
             _taskService = taskService;
             _notificationBroadcaster = notificationBroadcaster;
             _notificationService = notificationService;
             _treeBroadcaster = treeBroadcaster;
+            _treeKanbanBroadcaster = treeKanbanBroadcaster;
+            _kanbanBroadcaster = kanbanBroadcaster;
             _auditService = auditService;
             _logger = logger;
         }
@@ -67,6 +74,7 @@ namespace TaskManagement.Api.Controllers
                     await _notificationBroadcaster.BroadcastNotificationAsync(notification);
             }
 
+            await _kanbanBroadcaster.BroadcastTaskCreatedAsync(groupId, task.Id, task.StatusId, userId);
             return CreatedAtAction(
                 nameof(GetTaskById),
                 new { taskId = task.Id },
@@ -136,7 +144,9 @@ namespace TaskManagement.Api.Controllers
             if (notification != null)
                 await _notificationBroadcaster.BroadcastNotificationAsync(notification);
 
+            await _kanbanBroadcaster.BroadcastTaskUpdatedAsync(task.GroupId, taskId, userId);
             return Ok(task);
+
         }
 
         [HttpPut("{taskId}/status")]
@@ -172,7 +182,8 @@ namespace TaskManagement.Api.Controllers
             foreach (var notification in notifications)
                 await _notificationBroadcaster.BroadcastNotificationAsync(notification);
 
-            await _treeBroadcaster.BroadcastTreeUpdateAsync(result.Value!.Task.GroupId);
+            await _treeBroadcaster.BroadcastTreeUpdateAsync(statusChange.Task.GroupId);
+            await _treeKanbanBroadcaster.BroadcastKanbanTreeUpdateAsync(statusChange.Task.GroupId);
 
             return Ok(statusChange);
         }
@@ -311,6 +322,8 @@ namespace TaskManagement.Api.Controllers
                 entityId: taskId,
                 action: "Deleted",
                 groupId: task.GroupId);
+
+            await _kanbanBroadcaster.BroadcastTaskDeletedAsync(task.GroupId, taskId, task.StatusId, userId);
 
             return Ok(new { message = "Task deleted successfully" });
         }
