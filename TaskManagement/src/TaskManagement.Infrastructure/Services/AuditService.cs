@@ -4,17 +4,20 @@ using TaskManagement.Core.Common;
 using TaskManagement.Core.DTO.Audit;
 using TaskManagement.Core.Entities;
 using TaskManagement.Core.Interfaces;
+using TaskManagement.Infrastructure.Data;
 
 namespace TaskManagement.Infrastructure.Services
 {
     public class AuditService : IAuditService
     {
-        private readonly IApplicationDbContext _context;
+        private readonly IDbContextFactory<ApplicationDbContext> _factory;
         private readonly ILogger<AuditService> _logger;
 
-        public AuditService(IApplicationDbContext context, ILogger<AuditService> logger)
+        public AuditService(
+            IDbContextFactory<ApplicationDbContext> factory,
+            ILogger<AuditService> logger)
         {
-            _context = context;
+            _factory = factory;
             _logger = logger;
         }
 
@@ -31,7 +34,9 @@ namespace TaskManagement.Infrastructure.Services
             string? newValue = null,
             string? reason = null)
         {
-            var user = await _context.Users.FindAsync(userId);
+            await using var context = await _factory.CreateDbContextAsync();
+
+            var user = await context.Users.FindAsync(userId);
             if (user == null)
             {
                 _logger.LogWarning("Cannot create audit log for non-existent user {UserId}", userId);
@@ -56,8 +61,8 @@ namespace TaskManagement.Infrastructure.Services
                 CreatedAt = DateTime.UtcNow
             };
 
-            _context.AuditLogs.Add(auditLog);
-            await _context.SaveChangesAsync();
+            context.AuditLogs.Add(auditLog);
+            await context.SaveChangesAsync();
 
             _logger.LogInformation(
                 "Audit log created: {EntityType} {EntityId} - {Action} by user {UserId} in group {GroupId}",
@@ -66,18 +71,20 @@ namespace TaskManagement.Infrastructure.Services
 
         public async Task<Result<List<AuditLogDto>>> GetEntityHistoryAsync(string entityType, Guid entityId, Guid requestingUserId)
         {
-            Guid? groupId = await GetEntityGroupIdAsync(entityType, entityId);
+            await using var context = await _factory.CreateDbContextAsync();
+
+            Guid? groupId = await GetEntityGroupIdAsync(context, entityType, entityId);
 
             if (groupId.HasValue)
             {
-                var isMember = await _context.GroupMembers
+                var isMember = await context.GroupMembers
                     .AnyAsync(gm => gm.GroupId == groupId.Value && gm.UserId == requestingUserId);
 
                 if (!isMember)
                     return Error.Forbidden("You must be a member of this group to view its audit history");
             }
 
-            var logs = await _context.AuditLogs
+            var logs = await context.AuditLogs
                 .Where(a => a.EntityType == entityType && a.EntityId == entityId)
                 .OrderByDescending(a => a.CreatedAt)
                 .Select(a => MapToDto(a))
@@ -88,13 +95,15 @@ namespace TaskManagement.Infrastructure.Services
 
         public async Task<Result<List<AuditLogDto>>> GetGroupHistoryAsync(Guid groupId, Guid requestingUserId, int pageNumber = 1, int pageSize = 50)
         {
-            var isMember = await _context.GroupMembers
+            await using var context = await _factory.CreateDbContextAsync();
+
+            var isMember = await context.GroupMembers
                 .AnyAsync(gm => gm.GroupId == groupId && gm.UserId == requestingUserId);
 
             if (!isMember)
                 return Error.Forbidden("You must be a member of this group to view its audit history");
 
-            var logs = await _context.AuditLogs
+            var logs = await context.AuditLogs
                 .Where(a => a.GroupId == groupId)
                 .OrderByDescending(a => a.CreatedAt)
                 .Skip((pageNumber - 1) * pageSize)
@@ -107,12 +116,14 @@ namespace TaskManagement.Infrastructure.Services
 
         public async Task<Result<List<AuditLogDto>>> GetUserHistoryAsync(Guid userId, Guid requestingUserId, int pageNumber = 1, int pageSize = 50)
         {
-            var userGroupIds = await _context.GroupMembers
+            await using var context = await _factory.CreateDbContextAsync();
+
+            var userGroupIds = await context.GroupMembers
                 .Where(gm => gm.UserId == requestingUserId)
                 .Select(gm => gm.GroupId)
                 .ToListAsync();
 
-            var logs = await _context.AuditLogs
+            var logs = await context.AuditLogs
                 .Where(a => a.UserId == userId &&
                            (a.GroupId == null || userGroupIds.Contains(a.GroupId.Value)))
                 .OrderByDescending(a => a.CreatedAt)
@@ -129,18 +140,18 @@ namespace TaskManagement.Infrastructure.Services
             return await GetEntityHistoryAsync("TaskItem", taskId, requestingUserId);
         }
 
-        private async Task<Guid?> GetEntityGroupIdAsync(string entityType, Guid entityId)
+        private static async Task<Guid?> GetEntityGroupIdAsync(ApplicationDbContext context, string entityType, Guid entityId)
         {
             return entityType switch
             {
-                "TaskItem" => await _context.Tasks
+                "TaskItem" => await context.Tasks
                     .Where(t => t.Id == entityId)
                     .Select(t => (Guid?)t.GroupId)
                     .FirstOrDefaultAsync(),
 
                 "Group" => entityId,
 
-                "GroupMember" => await _context.GroupMembers
+                "GroupMember" => await context.GroupMembers
                     .Where(gm => gm.Id == entityId)
                     .Select(gm => (Guid?)gm.GroupId)
                     .FirstOrDefaultAsync(),
