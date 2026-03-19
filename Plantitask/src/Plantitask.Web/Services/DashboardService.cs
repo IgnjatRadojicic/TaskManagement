@@ -8,7 +8,7 @@ namespace Plantitask.Web.Services
         public DashboardService(HttpClient http) : base(http) {}
 
         public Task<ServiceResult<GroupStatisticsModel>> GetGroupStatisticsAsync(Guid groupId)
-    => GetAsync<GroupStatisticsModel>($"api/dashboard/groups/{groupId}/statistics");
+    => GetAsync<GroupStatisticsModel>($"api/dashboard/groups/{groupId}");
 
         public async Task<ServiceResult<PersonalDashboardDto>> GetPersonalDashboardAsync()
         {

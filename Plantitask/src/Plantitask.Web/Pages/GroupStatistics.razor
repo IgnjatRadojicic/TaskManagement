@@ -1,0 +1,247 @@
+@page "/groups/{Slug}/{GroupId:guid}/statistics"
+@layout PublicLayout
+@inject IDashboardService DashboardService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Group Statistics</PageTitle>
+
+<div class="stats-page">
+    <div class="stats-header">
+        <button class="stats-back-btn" @onclick="GoBack">
+            <MudIcon Icon="@Icons.Material.Filled.ArrowBack" Size="Size.Small" />
+            <span>Back to Board</span>
+        </button>
+        <div class="stats-header-title-row">
+            <h1 class="stats-page-title text-sora">@(_stats?.GroupName ?? "Group") Statistics</h1>
+            @if (_stats is not null)
+            {
+                <span class="stats-member-badge">
+                    <MudIcon Icon="@Icons.Material.Outlined.People" Size="Size.Small" />
+                    @_stats.MemberCount member@(_stats.MemberCount != 1 ? "s" : "")
+                </span>
+            }
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="stats-loading">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" />
+        </div>
+    }
+    else if (_stats is null)
+    {
+        <div class="stats-empty">
+            <MudIcon Icon="@Icons.Material.Outlined.BarChart" Style="font-size:48px; color:var(--c-text-faint);" />
+            <p>Could not load statistics.</p>
+        </div>
+    }
+    else
+    {
+        <div class="stats-wheels-row">
+            <div class="stats-wheel-card">
+                <canvas id="wheelCompletion" width="140" height="140"></canvas>
+                <div class="stats-wheel-info">
+                    <span class="stats-wheel-value text-sora">@(_stats.CompletionPercentage.ToString("0"))%</span>
+                    <span class="stats-wheel-label">Overall Completion</span>
+                </div>
+            </div>
+            <div class="stats-wheel-card">
+                <canvas id="wheelInProgress" width="140" height="140"></canvas>
+                <div class="stats-wheel-info">
+                    <span class="stats-wheel-value text-sora">@InProgressPercent.ToString("0")%</span>
+                    <span class="stats-wheel-label">In Progress</span>
+                </div>
+            </div>
+            <div class="stats-wheel-card">
+                <canvas id="wheelOverdue" width="140" height="140"></canvas>
+                <div class="stats-wheel-info">
+                    <span class="stats-wheel-value text-sora">@OverduePercent.ToString("0")%</span>
+                    <span class="stats-wheel-label">Overdue</span>
+                </div>
+            </div>
+            <div class="stats-wheel-card">
+                <canvas id="wheelReview" width="140" height="140"></canvas>
+                <div class="stats-wheel-info">
+                    <span class="stats-wheel-value text-sora">@ReviewPercent.ToString("0")%</span>
+                    <span class="stats-wheel-label">Under Review</span>
+                </div>
+            </div>
+        </div>
+        <div class="stats-metrics-row">
+            <div class="stats-metric-card">
+                <div class="stats-metric-icon" style="background:var(--c-primary-a10); color:var(--c-primary);">
+                    <MudIcon Icon="@Icons.Material.Outlined.Assignment" Size="Size.Small" />
+                </div>
+                <div class="stats-metric-info">
+                    <span class="stats-metric-value text-sora">@_stats.TotalTasks</span>
+                    <span class="stats-metric-label">Total Tasks</span>
+                </div>
+            </div>
+            <div class="stats-metric-card">
+                <div class="stats-metric-icon" style="background:rgba(76,175,80,0.1); color:#4CAF50;">
+                    <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Small" />
+                </div>
+                <div class="stats-metric-info">
+                    <span class="stats-metric-value text-sora">@_stats.CompletedTasks</span>
+                    <span class="stats-metric-label">Completed</span>
+                </div>
+            </div>
+            <div class="stats-metric-card">
+                <div class="stats-metric-icon" style="background:rgba(255,152,0,0.1); color:#FF9800;">
+                    <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
+                </div>
+                <div class="stats-metric-info">
+                    <span class="stats-metric-value text-sora">@_stats.InProgressTasks</span>
+                    <span class="stats-metric-label">In Progress</span>
+                </div>
+            </div>
+            <div class="stats-metric-card">
+                <div class="stats-metric-icon" style="background:rgba(244,67,54,0.1); color:#F44336;">
+                    <MudIcon Icon="@Icons.Material.Outlined.Warning" Size="Size.Small" />
+                </div>
+                <div class="stats-metric-info">
+                    <span class="stats-metric-value text-sora">@_stats.OverdueTasks</span>
+                    <span class="stats-metric-label">Overdue</span>
+                </div>
+            </div>
+            <div class="stats-metric-card">
+                <div class="stats-metric-icon" style="background:rgba(156,193,3,0.1); color:#9CC103;">
+                    <MudIcon Icon="@Icons.Material.Outlined.Speed" Size="Size.Small" />
+                </div>
+                <div class="stats-metric-info">
+                    <span class="stats-metric-value text-sora">@(_stats.AverageCompletionDays?.ToString("0.1") ?? "—")</span>
+                    <span class="stats-metric-label">Avg Days to Complete</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-charts-row">
+            <div class="stats-chart-card">
+                <h3 class="stats-chart-title text-sora">Tasks by Status</h3>
+                <div class="stats-chart-container stats-chart-donut-wrap">
+                    <canvas id="chartStatus"></canvas>
+                </div>
+            </div>
+            <div class="stats-chart-card">
+                <h3 class="stats-chart-title text-sora">Tasks by Priority</h3>
+                <div class="stats-chart-container stats-chart-donut-wrap">
+                    <canvas id="chartPriority"></canvas>
+                </div>
+            </div>
+        </div>
+
+       
+        <div class="stats-chart-card stats-chart-wide">
+            <h3 class="stats-chart-title text-sora">Completion Trend</h3>
+            <div class="stats-chart-container stats-chart-line-wrap">
+                <canvas id="chartTrend"></canvas>
+            </div>
+        </div>
+
+        
+        @if (_stats.MemberWorkload.Any())
+        {
+            <div class="stats-chart-card stats-chart-wide">
+                <h3 class="stats-chart-title text-sora">Member Workload</h3>
+                <div class="stats-workload-table">
+                    <div class="stats-workload-header">
+                        <span class="stats-wl-col-name">Member</span>
+                        <span class="stats-wl-col">Assigned</span>
+                        <span class="stats-wl-col">Completed</span>
+                        <span class="stats-wl-col">Overdue</span>
+                        <span class="stats-wl-col-bar">Progress</span>
+                    </div>
+                    @foreach (var m in _stats.MemberWorkload)
+                    {
+                        var total = m.AssignedCount + m.CompletedCount;
+                        var pct = total > 0 ? (double)m.CompletedCount / total * 100 : 0;
+                        <div class="stats-workload-row">
+                            <span class="stats-wl-col-name">
+                                <span class="stats-wl-avatar">@(m.UserName.Length > 0 ? m.UserName[0].ToString().ToUpper() : "?")</span>
+                                @m.UserName
+                            </span>
+                            <span class="stats-wl-col">@m.AssignedCount</span>
+                            <span class="stats-wl-col stats-wl-done">@m.CompletedCount</span>
+                            <span class="stats-wl-col stats-wl-overdue">@m.OverdueCount</span>
+                            <span class="stats-wl-col-bar">
+                                <div class="stats-wl-bar-track">
+                                    <div class="stats-wl-bar-fill" style="width:@(pct.ToString("0"))%"></div>
+                                </div>
+                                <span class="stats-wl-bar-pct">@(pct.ToString("0"))%</span>
+                            </span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public Guid GroupId { get; set; }
+
+    private GroupStatisticsModel? _stats;
+    private bool _loading = true;
+
+    private double InProgressPercent => _stats is { TotalTasks: > 0 } ? (double)_stats.InProgressTasks / _stats.TotalTasks * 100 : 0;
+    private double OverduePercent => _stats is { TotalTasks: > 0 } ? (double)_stats.OverdueTasks / _stats.TotalTasks * 100 : 0;
+    private double ReviewPercent => _stats is { TotalTasks: > 0 } ? (double)_stats.UnderReviewTasks / _stats.TotalTasks * 100 : 0;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var result = await DashboardService.GetGroupStatisticsAsync(GroupId);
+            if (result.Success && result.Data is not null)
+            {
+                _stats = result.Data;
+                _loading = false;
+                StateHasChanged();
+
+                await Task.Delay(50);
+                await RenderCharts();
+            }
+            else
+            {
+                _loading = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task RenderCharts()
+    {
+        if (_stats is null) return;
+
+        // Progress wheels
+        await JS.InvokeVoidAsync("groupStats.renderWheel", "wheelCompletion", _stats.CompletionPercentage, "#9CC103", "#F0F0F0");
+        await JS.InvokeVoidAsync("groupStats.renderWheel", "wheelInProgress", InProgressPercent, "#FF9800", "#F0F0F0");
+        await JS.InvokeVoidAsync("groupStats.renderWheel", "wheelOverdue", OverduePercent, "#F44336", "#F0F0F0");
+        await JS.InvokeVoidAsync("groupStats.renderWheel", "wheelReview", ReviewPercent, "#2196F3", "#F0F0F0");
+
+        // Status donut
+        var statusLabels = _stats.TasksByStatus.Select(s => s.StatusName).ToArray();
+        var statusData = _stats.TasksByStatus.Select(s => (double)s.Count).ToArray();
+        var statusColors = _stats.TasksByStatus.Select(s => s.Color ?? "#9E9E9E").ToArray();
+        await JS.InvokeVoidAsync("groupStats.renderDonut", "chartStatus", statusLabels, statusData, statusColors);
+
+        // Priority donut
+        var prioLabels = _stats.TasksByPriority.Select(p => p.PriorityName).ToArray();
+        var prioData = _stats.TasksByPriority.Select(p => (double)p.Count).ToArray();
+        var prioColors = _stats.TasksByPriority.Select(p => p.Color ?? "#9E9E9E").ToArray();
+        await JS.InvokeVoidAsync("groupStats.renderDonut", "chartPriority", prioLabels, prioData, prioColors);
+
+        // Completion trend line
+        var trendLabels = _stats.CompletionTrend.Select(t => t.Date.ToString("MMM d")).ToArray();
+        var trendData = _stats.CompletionTrend.Select(t => (double)t.CompletedCount).ToArray();
+        await JS.InvokeVoidAsync("groupStats.renderTrend", "chartTrend", trendLabels, trendData);
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo($"/groups/{Slug}/{GroupId}");
+    }
+}
