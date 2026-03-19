@@ -1,0 +1,48 @@
+<!-- Presentational component avatar, display name, upload/remove actions -->
+
+<div class="ds-profile-card">
+    <div class="ds-profile-banner"></div>
+    <div class="ds-profile-card-body">
+        <div class="ds-profile-card-left">
+            <div class="ds-profile-avatar-wrapper">
+                @if (UploadingPicture)
+                {
+                    <div class="ds-profile-avatar ds-profile-avatar-loading">
+                        <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+                    </div>
+                }
+                else if (!string.IsNullOrEmpty(Profile.ProfilePictureUrl))
+                {
+                    <img class="ds-profile-avatar" src="@Profile.ProfilePictureUrl" alt="@Profile.DisplayName" />
+                }
+                else
+                {
+                    <div class="ds-profile-avatar ds-profile-avatar-placeholder">
+                        <span>@Profile.Initials</span>
+                    </div>
+                }
+                <label class="ds-profile-avatar-edit" title="Change avatar">
+                    <MudIcon Icon="@Icons.Material.Outlined.CameraAlt" Size="Size.Small" />
+                    <InputFile OnChange="OnPictureUpload" accept="image/*" style="display:none" />
+                </label>
+            </div>
+            <div class="ds-profile-card-info">
+                <span class="text-sora ds-profile-display-name">@Profile.DisplayName</span>
+                <span class="ds-profile-username">@@@Profile.UserName</span>
+            </div>
+        </div>
+        @if (!string.IsNullOrEmpty(Profile.ProfilePictureUrl))
+        {
+            <button class="ds-btn-text ds-btn-danger-text" @onclick="OnRemovePicture">
+                Remove Avatar
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public UserProfileDto Profile { get; set; } = default!;
+    [Parameter] public bool UploadingPicture { get; set; }
+    [Parameter] public EventCallback<InputFileChangeEventArgs> OnPictureUpload { get; set; }
+    [Parameter] public EventCallback OnRemovePicture { get; set; }
+}

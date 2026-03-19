@@ -1,0 +1,145 @@
+@page "/settings"
+@page "/settings/{Section}"
+@layout SettingsLayout
+@implements IDisposable
+
+@inject ISettingsUIService SettingsUI
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<div class="ds-settings">
+    <!-- Left spacer + sidebar -->
+    <div class="ds-settings-nav-area">
+        <div class="ds-settings-nav">
+            <div class="ds-settings-nav-label">USER SETTINGS</div>
+            <button class="ds-settings-nav-item @(ActiveSection == "account" ? "ds-settings-nav-item-active" : "")"
+                    @onclick='() => Navigate("account")'>
+                My Account
+            </button>
+            <button class="ds-settings-nav-item @(ActiveSection == "notifications" ? "ds-settings-nav-item-active" : "")"
+                    @onclick='() => Navigate("notifications")'>
+                Notifications
+            </button>
+
+            <div class="ds-settings-nav-divider"></div>
+
+            <button class="ds-settings-nav-item ds-settings-nav-danger" @onclick="HandleLogout">
+                Log Out
+                <MudIcon Icon="@Icons.Material.Outlined.Logout" Size="Size.Small" />
+            </button>
+        </div>
+    </div>
+
+    <!-- Content + right close area -->
+    <div class="ds-settings-main-area">
+        <div class="ds-settings-content">
+            @switch (ActiveSection)
+            {
+                case "notifications":
+                    <NotificationSettings />
+                    break;
+                default:
+                    <AccountSettings />
+                    break;
+            }
+        </div>
+
+        <div class="ds-settings-close-area">
+            <button class="ds-settings-close-btn" @onclick="NavigateBack" title="Close settings (back to field)">
+                <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Medium" />
+            </button>
+            <span class="ds-settings-close-label">ESC</span>
+        </div>
+    </div>
+
+    <!-- Unsaved changes bar -->
+    <div class="ds-unsaved-bar @(_hasChanges ? "ds-unsaved-bar-visible" : "")">
+        <div class="ds-unsaved-bar-inner">
+            <span class="ds-unsaved-text">Careful — you have unsaved changes!</span>
+            <div class="ds-unsaved-actions">
+                <button class="ds-unsaved-reset" @onclick="HandleReset">Reset</button>
+                <button class="ds-unsaved-save" @onclick="HandleSave" disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true"
+                                             Color="Color.Inherit" Style="width:16px;height:16px;" />
+                    }
+                    else
+                    {
+                        <span>Save Changes</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Section { get; set; }
+
+    private string ActiveSection => Section?.ToLower() ?? "account";
+    private bool _hasChanges;
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        SettingsUI.OnDirtyStateChanged += HandleDirtyStateChanged;
+    }
+
+    private void HandleDirtyStateChanged(bool hasChanges)
+    {
+        _hasChanges = hasChanges;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleSave()
+    {
+        _saving = true;
+        StateHasChanged();
+
+        var (success, error) = await SettingsUI.RequestSave();
+
+        if (success)
+            Snackbar.Add("Changes saved", Severity.Success);
+        else
+            Snackbar.Add(error ?? "Save failed", Severity.Error);
+
+        _saving = false;
+        StateHasChanged();
+    }
+
+    private void HandleReset()
+    {
+        SettingsUI.RequestReset();
+    }
+
+    private void Navigate(string section)
+    {
+        if (_hasChanges)
+        {
+            Snackbar.Add("Save or reset your changes before switching sections", Severity.Warning);
+            return;
+        }
+        Navigation.NavigateTo($"/settings/{section}");
+    }
+
+    private void NavigateBack()
+    {
+        if (_hasChanges)
+        {
+            Snackbar.Add("You have unsaved changes! Save or reset before leaving.", Severity.Warning);
+            return;
+        }
+        Navigation.NavigateTo("/field");
+    }
+
+    private void HandleLogout()
+    {
+        Navigation.NavigateTo("/", forceLoad: true);
+    }
+
+    public void Dispose()
+    {
+        SettingsUI.OnDirtyStateChanged -= HandleDirtyStateChanged;
+    }
+}

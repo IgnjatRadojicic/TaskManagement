@@ -1,0 +1,254 @@
+@inject INotificationPreferenceService PreferenceService
+@inject ISettingsUIService SettingsUI
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+@if (!_loaded)
+{
+    <div class="ds-settings-loading">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    </div>
+}
+else
+{
+    <h1 class="text-sora ds-section-title">Notifications</h1>
+    <p class="ds-section-subtitle">Choose what notifications you receive and how.</p>
+
+    <!-- Master toggles -->
+    <div class="ds-card">
+        <div class="ds-pref-master-row">
+            <div class="ds-pref-master-info">
+                <MudIcon Icon="@Icons.Material.Outlined.NotificationsActive" Size="Size.Small"
+                         Class="ds-pref-icon-accent" />
+                <div>
+                    <div class="ds-pref-label">Enable All Notifications</div>
+                    <div class="ds-pref-desc">Toggle all notification types at once</div>
+                </div>
+            </div>
+            <MudSwitch T="bool" Value="@_allEnabled" ValueChanged="ToggleAll"
+                       Color="Color.Success" UncheckedColor="Color.Default" />
+        </div>
+        <div class="ds-pref-master-row">
+            <div class="ds-pref-master-info">
+                <MudIcon Icon="@Icons.Material.Outlined.Email" Size="Size.Small"
+                         Class="ds-pref-icon-accent" />
+                <div>
+                    <div class="ds-pref-label">Enable All Email Notifications</div>
+                    <div class="ds-pref-desc">Toggle email delivery for all types</div>
+                </div>
+            </div>
+            <MudSwitch T="bool" Value="@_allEmailEnabled" ValueChanged="ToggleAllEmail"
+                       Color="Color.Success" UncheckedColor="Color.Default" />
+        </div>
+    </div>
+
+    <!-- Task notifications -->
+    <div class="ds-card">
+        <div class="ds-card-header">
+            <h2 class="text-sora">Task Notifications</h2>
+            <p>Notifications related to task activity in your groups.</p>
+        </div>
+        @foreach (var pref in _preferences.Where(p => IsTaskNotification(p.TypeName)))
+        {
+            <NotificationPrefRow Preference="pref"
+                                 OnEnabledChanged="v => SetPrefEnabled(pref, v)"
+                                 OnEmailEnabledChanged="v => SetPrefEmailEnabled(pref, v)"
+                                 OnReminderHoursChanged="v => SetReminderHours(pref, v)" />
+        }
+    </div>
+
+    <!-- Group notifications -->
+    <div class="ds-card">
+        <div class="ds-card-header">
+            <h2 class="text-sora">Group Notifications</h2>
+            <p>Notifications about group invitations and membership.</p>
+        </div>
+        @foreach (var pref in _preferences.Where(p => IsGroupNotification(p.TypeName)))
+        {
+            <NotificationPrefRow Preference="pref"
+                                 OnEnabledChanged="v => SetPrefEnabled(pref, v)"
+                                 OnEmailEnabledChanged="v => SetPrefEmailEnabled(pref, v)"
+                                 OnReminderHoursChanged="v => SetReminderHours(pref, v)" />
+        }
+    </div>
+}
+
+@code {
+    private List<NotificationPreferenceDto> _preferences = new();
+    private List<NotificationPreferenceDto> _original = new();
+    private bool _loaded;
+    private bool _allEnabled;
+    private bool _allEmailEnabled;
+
+    private readonly Dictionary<string, bool> _emailStateBeforeDisable = new();
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        SettingsUI.OnSaveRequested += HandleSave;
+        SettingsUI.OnResetRequested += HandleReset;
+
+        var result = await PreferenceService.GetPreferencesAsync();
+        if (result.Success && result.Data is not null)
+        {
+            _preferences = result.Data;
+            _original = result.Data.Select(Clone).ToList();
+            UpdateMasterToggles();
+        }
+        _loaded = true;
+    }
+
+
+    private async Task<(bool Success, string? Error)> HandleSave()
+    {
+        var model = new UpdateNotificationPreferenceDto
+        {
+            Preferences = _preferences.Select(p => new NotificationPreferenceItemDto
+            {
+                Type = p.Type,
+                IsEnabled = p.IsEnabled,
+                IsEmailEnabled = p.IsEmailEnabled,
+                ReminderHoursBefore = p.ReminderHoursBefore
+            }).ToList()
+        };
+
+        var result = await PreferenceService.SavePreferencesAsync(model);
+
+        if (result.Success)
+        {
+            _original = _preferences.Select(Clone).ToList();
+            _emailStateBeforeDisable.Clear();
+            SettingsUI.NotifyDirtyStateChanged(false);
+            StateHasChanged();
+            return (true, null);
+        }
+
+        return (false, result.Error);
+    }
+
+    private void HandleReset()
+    {
+        for (var i = 0; i < _preferences.Count; i++)
+        {
+            _preferences[i].IsEnabled = _original[i].IsEnabled;
+            _preferences[i].IsEmailEnabled = _original[i].IsEmailEnabled;
+            _preferences[i].ReminderHoursBefore = _original[i].ReminderHoursBefore;
+        }
+
+        _emailStateBeforeDisable.Clear();
+        UpdateMasterToggles();
+        SettingsUI.NotifyDirtyStateChanged(false);
+        StateHasChanged();
+    }
+
+
+    private void SetPrefEnabled(NotificationPreferenceDto pref, bool value)
+    {
+        if (!value)
+        {
+            // Snapshot email state BEFORE clearing it
+            _emailStateBeforeDisable[pref.TypeName] = pref.IsEmailEnabled;
+            pref.IsEnabled = false;
+            pref.IsEmailEnabled = false;
+        }
+        else
+        {
+            pref.IsEnabled = true;
+
+            if (_emailStateBeforeDisable.TryGetValue(pref.TypeName, out var previousEmail))
+            {
+                pref.IsEmailEnabled = previousEmail;
+                _emailStateBeforeDisable.Remove(pref.TypeName);
+            }
+            else
+            {
+                var orig = _original.FirstOrDefault(o => o.TypeName == pref.TypeName);
+                if (orig is not null)
+                    pref.IsEmailEnabled = orig.IsEmailEnabled;
+            }
+        }
+
+        UpdateMasterToggles();
+        DetectChanges();
+    }
+
+    private void SetPrefEmailEnabled(NotificationPreferenceDto pref, bool value)
+    {
+        pref.IsEmailEnabled = value;
+        UpdateMasterToggles();
+        DetectChanges();
+    }
+
+    private void SetReminderHours(NotificationPreferenceDto pref, int? value)
+    {
+        pref.ReminderHoursBefore = value;
+        DetectChanges();
+    }
+
+    private void ToggleAll(bool value)
+    {
+        foreach (var p in _preferences)
+            SetPrefEnabled(p, value);
+    }
+
+    private void ToggleAllEmail(bool value)
+    {
+        foreach (var p in _preferences.Where(p => p.IsEnabled))
+            p.IsEmailEnabled = value;
+
+        UpdateMasterToggles();
+        DetectChanges();
+    }
+
+    // ----- Helpers -----
+
+    private void UpdateMasterToggles()
+    {
+        _allEnabled = _preferences.Count > 0 && _preferences.All(p => p.IsEnabled);
+        _allEmailEnabled = _preferences.Any(p => p.IsEnabled)
+                        && _preferences.Where(p => p.IsEnabled).All(p => p.IsEmailEnabled);
+    }
+
+    private void DetectChanges()
+    {
+        var dirty = false;
+        for (var i = 0; i < _preferences.Count; i++)
+        {
+            var c = _preferences[i];
+            var o = _original[i];
+            if (c.IsEnabled != o.IsEnabled ||
+                c.IsEmailEnabled != o.IsEmailEnabled ||
+                c.ReminderHoursBefore != o.ReminderHoursBefore)
+            {
+                dirty = true;
+                break;
+            }
+        }
+        SettingsUI.NotifyDirtyStateChanged(dirty);
+        StateHasChanged();
+    }
+
+    private static NotificationPreferenceDto Clone(NotificationPreferenceDto p) => new()
+    {
+        Type = p.Type,
+        TypeName = p.TypeName,
+        Description = p.Description,
+        IsEnabled = p.IsEnabled,
+        IsEmailEnabled = p.IsEmailEnabled,
+        ReminderHoursBefore = p.ReminderHoursBefore
+    };
+
+    private static bool IsTaskNotification(string t) =>
+        t is "TaskAssigned" or "TaskStatusChanged" or "TaskCommentAdded"
+        or "TaskPriorityChanged" or "TaskUpdated" or "TaskDueSoon"
+        or "TaskOverdue" or "TaskCreated";
+
+    private static bool IsGroupNotification(string t) =>
+        t is "GroupInvitation";
+
+    public void Dispose()
+    {
+        SettingsUI.OnSaveRequested -= HandleSave;
+        SettingsUI.OnResetRequested -= HandleReset;
+    }
+}

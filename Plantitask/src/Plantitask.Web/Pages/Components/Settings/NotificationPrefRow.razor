@@ -1,0 +1,84 @@
+<!-- Presentational: renders one notification preference with toggles -->
+
+<div class="ds-pref-row">
+    <div class="ds-pref-row-icon">
+        <MudIcon Icon="@GetIcon(Preference.TypeName)" Size="Size.Small" />
+    </div>
+    <div class="ds-pref-row-content">
+        <div class="ds-pref-row-top">
+            <div class="ds-pref-row-info">
+                <div class="ds-pref-label">@FormatName(Preference.TypeName)</div>
+                <div class="ds-pref-desc">@Preference.Description</div>
+            </div>
+            <MudSwitch T="bool" Value="@Preference.IsEnabled"
+                       ValueChanged="OnEnabledChanged"
+                       Color="Color.Success" UncheckedColor="Color.Default" />
+        </div>
+        @if (Preference.IsEnabled)
+        {
+            <div class="ds-pref-options">
+                <div class="ds-pref-option">
+                    <MudIcon Icon="@Icons.Material.Outlined.Email" Size="Size.Small"
+                             Style="color:var(--c-text-muted);" />
+                    <span class="ds-pref-option-label">Email</span>
+                    <MudSwitch T="bool" Value="@Preference.IsEmailEnabled"
+                               ValueChanged="OnEmailEnabledChanged"
+                               Color="Color.Success" UncheckedColor="Color.Default" Size="Size.Small" />
+                </div>
+                @if (Preference.TypeName == "TaskDueSoon")
+                {
+                    <div class="ds-pref-option">
+                        <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small"
+                                 Style="color:var(--c-text-muted);" />
+                        <span class="ds-pref-option-label">Remind me</span>
+                        <MudSelect T="int?" Value="@Preference.ReminderHoursBefore"
+                             ValueChanged="OnReminderHoursChanged"
+                             Variant="Variant.Outlined" Dense="true"
+                             Style="max-width: 200px; font-size: 0.6rem;"
+                             Margin="Margin.Dense">
+                            <MudSelectItem T="int?" Value="6">6 hours before</MudSelectItem>
+                            <MudSelectItem T="int?" Value="12">12 hours before</MudSelectItem>
+                            <MudSelectItem T="int?" Value="24">24 hours before</MudSelectItem>
+                            <MudSelectItem T="int?" Value="48">48 hours before</MudSelectItem>
+                        </MudSelect>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public NotificationPreferenceDto Preference { get; set; } = default!;
+    [Parameter] public EventCallback<bool> OnEnabledChanged { get; set; }
+    [Parameter] public EventCallback<bool> OnEmailEnabledChanged { get; set; }
+    [Parameter] public EventCallback<int?> OnReminderHoursChanged { get; set; }
+
+    private static string GetIcon(string t) => t switch
+    {
+        "TaskAssigned" => Icons.Material.Outlined.PersonAdd,
+        "TaskStatusChanged" => Icons.Material.Outlined.SyncAlt,
+        "TaskCommentAdded" => Icons.Material.Outlined.ChatBubbleOutline,
+        "TaskPriorityChanged" => Icons.Material.Outlined.Flag,
+        "TaskUpdated" => Icons.Material.Outlined.Edit,
+        "TaskCreated" => Icons.Material.Outlined.AddTask,
+        "GroupInvitation" => Icons.Material.Outlined.GroupAdd,
+        "TaskDueSoon" => Icons.Material.Outlined.Schedule,
+        "TaskOverdue" => Icons.Material.Outlined.Warning,
+        _ => Icons.Material.Outlined.Notifications
+    };
+
+    private static string FormatName(string t) => t switch
+    {
+        "TaskAssigned" => "Task Assigned",
+        "TaskStatusChanged" => "Status Changed",
+        "TaskCommentAdded" => "New Comment",
+        "TaskPriorityChanged" => "Priority Changed",
+        "TaskUpdated" => "Task Updated",
+        "TaskCreated" => "Task Created",
+        "GroupInvitation" => "Group Invitation",
+        "TaskDueSoon" => "Task Due Soon",
+        "TaskOverdue" => "Task Overdue",
+        _ => t
+    };
+}

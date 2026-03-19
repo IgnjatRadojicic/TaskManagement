@@ -1,0 +1,207 @@
+@inject IUserProfileService ProfileService
+@inject ISettingsUIService SettingsUI
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+@if (_loading)
+{
+    <div class="ds-settings-loading">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    </div>
+}
+else
+{
+    <h1 class="text-sora ds-section-title">My Account</h1>
+
+    <!-- Profile card -->
+    <ProfileCard Profile="_profile"
+                 UploadingPicture="_uploadingPicture"
+                 OnPictureUpload="HandlePictureUpload"
+                 OnRemovePicture="RemoveProfilePicture" />
+
+    <!-- Editable fields -->
+    <div class="ds-card">
+        <div class="ds-field">
+            <label class="ds-field-label">USERNAME</label>
+            <input class="ds-field-input" type="text" value="@_editUserName"
+                   @oninput="e => { _editUserName = e.Value?.ToString() ?? string.Empty; DetectChanges(); }" />
+        </div>
+        <div class="ds-field-row">
+            <div class="ds-field">
+                <label class="ds-field-label">FIRST NAME</label>
+                <input class="ds-field-input" type="text" value="@_editFirstName"
+                       @oninput="e => { _editFirstName = e.Value?.ToString() ?? string.Empty; DetectChanges(); }" />
+            </div>
+            <div class="ds-field">
+                <label class="ds-field-label">LAST NAME</label>
+                <input class="ds-field-input" type="text" value="@_editLastName"
+                       @oninput="e => { _editLastName = e.Value?.ToString() ?? string.Empty; DetectChanges(); }" />
+            </div>
+        </div>
+        <div class="ds-field">
+            <label class="ds-field-label">EMAIL</label>
+            <div class="ds-field-static">@_profile.Email</div>
+        </div>
+    </div>
+
+    <!-- Password -->
+    <PasswordSection />
+
+    <!-- Meta -->
+    <div class="ds-card ds-card-meta">
+        <span>Member since @_profile.CreatedAt.ToString("MMMM d, yyyy")</span>
+        @if (_profile.LastLoginAt.HasValue)
+        {
+            <span>Last login: @_profile.LastLoginAt.Value.ToString("MMM d, yyyy h:mm tt")</span>
+        }
+    </div>
+}
+
+@code {
+    private UserProfileDto _profile = new();
+    private bool _loading = true;
+
+    private string _editUserName = "";
+    private string _editFirstName = "";
+    private string _editLastName = "";
+    private string _originalUserName = "";
+    private string _originalFirstName = "";
+    private string _originalLastName = "";
+
+    private bool _uploadingPicture;
+
+    // ----- Lifecycle -----
+
+    protected override async Task OnInitializedAsync()
+    {
+        SettingsUI.OnSaveRequested += HandleSave;
+        SettingsUI.OnResetRequested += HandleReset;
+
+        _loading = true;
+        var result = await ProfileService.GetProfileAsync();
+        if (result.Success && result.Data is not null)
+        {
+            _profile = result.Data;
+            Snapshot();
+        }
+        _loading = false;
+    }
+
+    // ----- Event bus handlers -----
+
+    private async Task<(bool Success, string? Error)> HandleSave()
+    {
+        var model = new UpdateUserProfileDto
+        {
+            UserName = _editUserName,
+            FirstName = _editFirstName,
+            LastName = _editLastName
+        };
+
+        var result = await ProfileService.UpdateProfileAsync(model);
+
+        if (result.Success && result.Data is not null)
+        {
+            _profile = result.Data;
+            Snapshot();
+            SettingsUI.NotifyDirtyStateChanged(false);
+            StateHasChanged();
+            return (true, null);
+        }
+
+        return (false, result.Error);
+    }
+
+    private void HandleReset()
+    {
+        _editUserName = _originalUserName;
+        _editFirstName = _originalFirstName;
+        _editLastName = _originalLastName;
+        SettingsUI.NotifyDirtyStateChanged(false);
+        StateHasChanged();
+    }
+
+    // ----- Internals -----
+
+    private void Snapshot()
+    {
+        _editUserName = _profile.UserName;
+        _editFirstName = _profile.FirstName ?? "";
+        _editLastName = _profile.LastName ?? "";
+        _originalUserName = _editUserName;
+        _originalFirstName = _editFirstName;
+        _originalLastName = _editLastName;
+    }
+
+    private void DetectChanges()
+    {
+        var dirty = _editUserName != _originalUserName
+                 || _editFirstName != _originalFirstName
+                 || _editLastName != _originalLastName;
+        SettingsUI.NotifyDirtyStateChanged(dirty);
+    }
+
+    // ----- Profile picture -----
+
+    private async Task HandlePictureUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+
+        var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp", "image/gif" };
+        if (!allowedTypes.Contains(file.ContentType))
+        {
+            Snackbar.Add("Only JPEG, PNG, WebP, and GIF images are allowed", Severity.Warning);
+            return;
+        }
+        if (file.Size > 5 * 1024 * 1024)
+        {
+            Snackbar.Add("Image must be under 5 MB", Severity.Warning);
+            return;
+        }
+
+        _uploadingPicture = true;
+        StateHasChanged();
+
+        try
+        {
+            using var stream = file.OpenReadStream(5 * 1024 * 1024);
+            var result = await ProfileService.UploadProfilePictureAsync(stream, file.Name, file.ContentType);
+            if (result.Success && result.Data is not null)
+            {
+                _profile.ProfilePictureUrl = result.Data.Url;
+                Snackbar.Add("Profile picture updated", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add(result.Error, Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Upload failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _uploadingPicture = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RemoveProfilePicture()
+    {
+        var result = await ProfileService.RemoveProfilePictureAsync();
+        if (result.Success)
+        {
+            _profile.ProfilePictureUrl = null;
+            Snackbar.Add("Profile picture removed", Severity.Success);
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        SettingsUI.OnSaveRequested -= HandleSave;
+        SettingsUI.OnResetRequested -= HandleReset;
+    }
+}
