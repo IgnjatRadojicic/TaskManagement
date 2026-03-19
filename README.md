@@ -41,48 +41,50 @@ The platform is built on a real mission: a portion of all future revenue will go
 
 ## Screenshots
 
-<table>
-  <tr>
-    <td width="50%">
-      <img src="Plantitask/docs/screenshots/landing-page.PNG" alt="Landing Page" />
-      <p align="center"><em>Landing page with nature-themed hero</em></p>
-    </td>
-    <td width="50%">
-      <img src="Plantitask/docs/screenshots/field.PNG" alt="The Field" />
-      <p align="center"><em>The Field: Each tree represents a project group</em></p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="Plantitask/docs/screenshots/kanban-board.PNG" alt="Kanban Board" />
-      <p align="center"><em>Kanban board with tree growing as tasks complete</em></p>
-    </td>
-    <td width="50%">
-      <img src="Plantitask/docs/screenshots/create-task.PNG" alt="Create Task" />
-      <p align="center"><em>Task creation with priority, due date, and assignment</em></p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="Plantitask/docs/screenshots/my-garden.PNG" alt="My Garden Dashboard" />
-      <p align="center"><em>Personal dashboard with overdue alerts and completion trends</em></p>
-    </td>
-    <td width="50%">
-      <img src="Plantitask/docs/screenshots/notifications.PNG" alt="Notifications" />
-      <p align="center"><em>Real-time notification panel with task assignment alerts</em></p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="Plantitask/docs/screenshots/login.PNG" alt="Login" />
-      <p align="center"><em>Email-first adaptive login flow</em></p>
-    </td>
-    <td width="50%">
-      <img src="Plantitask/docs/screenshots/register.PNG" alt="Register" />
-      <p align="center"><em>Account creation after email verification</em></p>
-    </td>
-  </tr>
-</table>
+### Landing Page
+<p align="center">
+  <img src="Plantitask/docs/screenshots/landing-page.PNG" alt="Landing Page" width="100%" />
+</p>
+
+### The Field
+> Each tree represents a project group. Plant seeds to create groups, drag trees to rearrange, and watch them grow as tasks are completed.
+<p align="center">
+  <img src="Plantitask/docs/screenshots/field.PNG" alt="The Field" width="100%" />
+</p>
+
+### Kanban Board
+> Drag-and-drop task management with a living tree that grows behind the board as work gets done.
+<p align="center">
+  <img src="Plantitask/docs/screenshots/kanban-board.PNG" alt="Kanban Board" width="100%" />
+</p>
+
+### My Garden (Dashboard)
+> Personal overview with active tasks, overdue alerts, completion trends, and group statistics.
+<p align="center">
+  <img src="Plantitask/docs/screenshots/my-garden.PNG" alt="My Garden Dashboard" width="100%" />
+</p>
+
+<details>
+<summary><strong>More Screenshots</strong></summary>
+
+### Task Creation
+<p align="center">
+  <img src="Plantitask/docs/screenshots/create-task.PNG" alt="Create Task" width="80%" />
+</p>
+
+### Real-time Notifications
+<p align="center">
+  <img src="Plantitask/docs/screenshots/notifications.PNG" alt="Notifications" width="100%" />
+</p>
+
+### Authentication
+<p align="center">
+  <img src="Plantitask/docs/screenshots/login.PNG" alt="Login" width="45%" />
+  &nbsp;&nbsp;
+  <img src="Plantitask/docs/screenshots/register.PNG" alt="Register" width="45%" />
+</p>
+
+</details>
 
 ---
 
