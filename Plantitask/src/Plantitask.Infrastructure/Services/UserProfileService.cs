@@ -1,0 +1,166 @@
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Plantitask.Core.Common;
+using Plantitask.Core.DTO.Users;
+using Plantitask.Core.Interfaces;
+using Plantitask.Infrastructure.Data;
+
+namespace Plantitask.Infrastructure.Services;
+
+public class UserProfileService : IUserProfileService
+{
+    private readonly ApplicationDbContext _context;
+    private readonly IFileStorageService _fileStorage;
+    private readonly IPasswordHasher _passwordHasher;
+    private readonly ILogger<UserProfileService> _logger;
+
+    public UserProfileService(
+        ApplicationDbContext context,
+        IFileStorageService fileStorage,
+        IPasswordHasher passwordHasher,
+        ILogger<UserProfileService> logger)
+    {
+        _context = context;
+        _fileStorage = fileStorage;
+        _passwordHasher = passwordHasher;
+        _logger = logger;
+    }
+
+    public async Task<Result<UserProfileDto>> GetProfileAsync(Guid userId)
+    {
+        var user = await _context.Users
+            .Where(u => u.Id == userId)
+            .Select(u => new UserProfileDto
+            {
+                Id = u.Id,
+                UserName = u.UserName,
+                Email = u.Email,
+                FirstName = u.FirstName,
+                LastName = u.LastName,
+                ProfilePictureUrl = u.ProfilePictureUrl,
+                LastLoginAt = u.LastLoginAt,
+                CreatedAt = u.CreatedAt
+            })
+            .FirstOrDefaultAsync();
+
+        if (user is null)
+            return Error.NotFound("User not found");
+
+        return user;
+    }
+
+    public async Task<Result<UserProfileDto>> UpdateProfileAsync(Guid userId, UpdateUserProfileDto dto)
+    {
+        var user = await _context.Users.FindAsync(userId);
+        if (user is null)
+            return Error.NotFound("User not found");
+
+        if (!string.IsNullOrWhiteSpace(dto.UserName) &&
+            !dto.UserName.Equals(user.UserName, StringComparison.OrdinalIgnoreCase))
+        {
+            var usernameTaken = await _context.Users
+                .AnyAsync(u => u.UserName == dto.UserName && u.Id != userId);
+
+            if (usernameTaken)
+                return Error.Validation("Username is already taken");
+
+            user.UserName = dto.UserName.Trim();
+        }
+
+        if (dto.FirstName is not null)
+            user.FirstName = dto.FirstName.Trim();
+
+        if (dto.LastName is not null)
+            user.LastName = dto.LastName.Trim();
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("User {UserId} updated their profile", userId);
+
+        return new UserProfileDto
+        {
+            Id = user.Id,
+            UserName = user.UserName,
+            Email = user.Email,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            ProfilePictureUrl = user.ProfilePictureUrl,
+            LastLoginAt = user.LastLoginAt,
+            CreatedAt = user.CreatedAt
+        };
+    }
+
+    public async Task<Result<string>> UploadProfilePictureAsync(
+        Guid userId, Stream fileStream, string fileName, string contentType)
+    {
+        var user = await _context.Users.FindAsync(userId);
+        if (user is null)
+            return Error.NotFound("User not found");
+
+        var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp", "image/gif" };
+        if (!allowedTypes.Contains(contentType.ToLower()))
+            return Error.Validation("Only JPEG, PNG, WebP, and GIF images are allowed");
+
+        if (!string.IsNullOrEmpty(user.ProfilePictureUrl))
+        {
+            try { await _fileStorage.DeleteFileAsync(user.ProfilePictureUrl); }
+            catch { /* old file cleanup is best-effort */ }
+        }
+
+        var path = $"profile-pictures/{userId}/{Guid.NewGuid()}{Path.GetExtension(fileName)}";
+        var storagePath = await _fileStorage.UploadFileAsync(fileStream, path, contentType);
+        user.ProfilePictureUrl = _fileStorage.GetFileUrl(storagePath);
+
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("User {UserId} updated their profile picture", userId);
+
+        return user.ProfilePictureUrl;
+    }
+
+    public async Task<Result> RemoveProfilePictureAsync(Guid userId)
+    {
+        var user = await _context.Users.FindAsync(userId);
+        if (user is null)
+            return Error.NotFound("User not found");
+
+        if (!string.IsNullOrEmpty(user.ProfilePictureUrl))
+        {
+            try { await _fileStorage.DeleteFileAsync(user.ProfilePictureUrl); }
+            catch { /* best-effort */ }
+        }
+
+        user.ProfilePictureUrl = null;
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("User {UserId} removed their profile picture", userId);
+
+        return Result.Success();
+    }
+
+    public async Task<Result> ChangePasswordAsync(Guid userId, ChangePasswordDto dto)
+    {
+        if (dto.NewPassword != dto.ConfirmNewPassword)
+            return Error.Validation("Passwords do not match");
+
+        if (dto.NewPassword.Length < 8)
+            return Error.Validation("Password must be at least 8 characters");
+
+        var user = await _context.Users.FindAsync(userId);
+        if (user is null)
+            return Error.NotFound("User not found");
+
+        if (!_passwordHasher.VerifyPassword(dto.CurrentPassword, user.PasswordHash))
+            return Error.Validation("Current password is incorrect");
+
+        user.PasswordHash = _passwordHasher.HashPassword(dto.NewPassword);
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("User {UserId} changed their password", userId);
+
+        return Result.Success();
+    }
+}
