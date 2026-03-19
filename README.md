@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=" Plantitask/docslogo.png" alt="Plantitask Logo" width="120" />
+  <img src=" Plantitask/docs/logo.png" alt="Plantitask Logo" width="120" />
 </p>
 
 <h1 align="center">Plantitask</h1>
@@ -34,7 +34,7 @@ Plantitask is a full-stack SaaS application that reimagines project management f
 The platform is built on a real mission: a portion of all future revenue will go to tree-planting foundations like One Tree Planted and Trees for the Future.
 
 <p align="center">
-  <img src=" Plantitask/docsscreenshots/landing-hero.png" alt="Plantitask Landing Page" width="100%" />
+  <img src=" Plantitask/docs/screenshots/landing-hero.png" alt="Plantitask Landing Page" width="100%" />
 </p>
 
 ---
@@ -44,41 +44,41 @@ The platform is built on a real mission: a portion of all future revenue will go
 <table>
   <tr>
     <td width="50%">
-      <img src=" Plantitask/docsscreenshots/landing-page.png" alt="Landing Page" />
+      <img src=" Plantitask/docs/screenshots/landing-page.png" alt="Landing Page" />
       <p align="center"><em>Landing page with nature-themed hero</em></p>
     </td>
     <td width="50%">
-      <img src=" Plantitask/docsscreenshots/field.png" alt="The Field" />
+      <img src=" Plantitask/docs/screenshots/field.png" alt="The Field" />
       <p align="center"><em>The Field: Each tree represents a project group</em></p>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src=" Plantitask/docsscreenshots/kanban-board.png" alt="Kanban Board" />
+      <img src=" Plantitask/docs/screenshots/kanban-board.png" alt="Kanban Board" />
       <p align="center"><em>Kanban board with tree growing as tasks complete</em></p>
     </td>
     <td width="50%">
-      <img src=" Plantitask/docsscreenshots/create-task.png" alt="Create Task" />
+      <img src=" Plantitask/docs/screenshots/create-task.png" alt="Create Task" />
       <p align="center"><em>Task creation with priority, due date, and assignment</em></p>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src=" Plantitask/docsscreenshots/my-garden.png" alt="My Garden Dashboard" />
+      <img src=" Plantitask/docs/screenshots/my-garden.png" alt="My Garden Dashboard" />
       <p align="center"><em>Personal dashboard with overdue alerts and completion trends</em></p>
     </td>
     <td width="50%">
-      <img src=" Plantitask/docsscreenshots/notifications.png" alt="Notifications" />
+      <img src=" Plantitask/docs/screenshots/notifications.png" alt="Notifications" />
       <p align="center"><em>Real-time notification panel with task assignment alerts</em></p>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src=" Plantitask/docsscreenshots/login.png" alt="Login" />
+      <img src=" Plantitask/docs/screenshots/login.png" alt="Login" />
       <p align="center"><em>Email-first adaptive login flow</em></p>
     </td>
     <td width="50%">
-      <img src=" Plantitask/docsscreenshots/register.png" alt="Register" />
+      <img src=" Plantitask/docs/screenshots/register.png" alt="Register" />
       <p align="center"><em>Account creation after email verification</em></p>
     </td>
   </tr>
@@ -103,7 +103,7 @@ The platform is built on a real mission: a portion of all future revenue will go
 | Email | SendGrid (SMTP templates) |
 | Concurrency | Optimistic Concurrency Control (RowVersion / ConcurrencyStamp) |
 | Testing | xUnit + Moq (unit and integration tests) |
-| API Docs | Swagger / OpenAPI |
+| API docs/ | Swagger / OpenAPI |
 | Rate Limiting | ASP.NET Core Fixed Window (60 req/min general, 10 req/min auth) |
 
 ### Frontend
