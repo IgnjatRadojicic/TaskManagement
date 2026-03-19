@@ -1,9 +1,12 @@
 ﻿@inherits LayoutComponentBase
+@implements IDisposable
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject ICurrentUserService CurrentUser
 @inject IFieldUIService FieldUI
+@inject INotificationService NotificationService
+@inject INotificationSignalRService NotificationSignalR
 
 <MudLayout>
 
@@ -57,24 +60,80 @@
     </button>
 
     <!-- Notification Panel -->
-    @if (_notificationsOpen)
-    {
-        <div class="field-notification-panel">
-            <div class="field-notification-header">
-                <h3 class="text-sora">Notifications</h3>
-                <button class="field-notification-mark-all" @onclick="MarkAllRead">Mark all as read</button>
-                <button class="field-icon-btn-sm" @onclick="ToggleNotifications">
-                    <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
-                </button>
-            </div>
-            <div class="field-notification-list">
-                <div class="field-notification-empty">
-                    <MudIcon Icon="@Icons.Material.Outlined.NotificationsNone" Size="Size.Large" Style="color:#BDBDBD;" />
-                    <p>No notifications yet</p>
+        @if (_notificationsOpen)
+        {
+            <div class="field-notification-panel">
+                <div class="field-notification-header">
+                    <h3 class="text-sora">Notifications</h3>
+                    @if (_notifications.Any(n => !n.IsRead))
+                    {
+                        <button class="field-notification-mark-all" @onclick="MarkAllRead">Mark all as read</button>
+                    }
+                    <button class="kanban-icon-btn-sm" @onclick="ToggleNotifications">
+                        <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                    </button>
+                </div>
+                <div class="field-notification-list">
+                    @if (_notificationsLoading)
+                    {
+                        <div class="field-notification-empty">
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+                        </div>
+                    }
+                    else if (!_notifications.Any())
+                    {
+                        <div class="field-notification-empty">
+                            <MudIcon Icon="@Icons.Material.Outlined.NotificationsNone" Size="Size.Large" Style="color:#BDBDBD;" />
+                            <p>No notifications yet</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var notification in _notifications)
+                        {
+                            <div class="field-notification-item @(!notification.IsRead ? "field-notification-unread" : "")"
+                                 @onclick="() => HandleNotificationClick(notification)">
+                                <div class="field-notification-item-icon">
+                                    <MudIcon Icon="@GetNotificationIcon(notification.TypeName)" Size="Size.Small" />
+                                </div>
+                                <div class="field-notification-item-content">
+                                    <div class="field-notification-item-title">@notification.Title</div>
+                                    <div class="field-notification-item-message">@notification.Message</div>
+                                    <div class="field-notification-item-time">@FormatTimeAgo(notification.CreatedAt)</div>
+                                </div>
+                                <div class="field-notification-item-actions">
+                                    @if (!notification.IsRead)
+                                    {
+                                        <button class="kanban-icon-btn-sm" @onclick:stopPropagation="true"
+                                                @onclick="() => MarkAsRead(notification)" title="Mark as read">
+                                            <MudIcon Icon="@Icons.Material.Outlined.DoneAll" Size="Size.Small" />
+                                        </button>
+                                    }
+                                    <button class="kanban-icon-btn-sm" @onclick:stopPropagation="true"
+                                            @onclick="() => DeleteNotification(notification)" title="Delete">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                                    </button>
+                                </div>
+                            </div>
+                        }
+
+                        @if (_hasMoreNotifications)
+                        {
+                            <button class="field-notification-load-more" @onclick="LoadMoreNotifications">
+                                @if (_loadingMore)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+                                }
+                                else
+                                {
+                                    <span>Load more</span>
+                                }
+                            </button>
+                        }
+                    }
                 </div>
             </div>
-        </div>
-    }
+        }
 
     <!-- Profile Dropdown -->
     @if (_profileMenuOpen)
@@ -123,7 +182,6 @@
     </MudMainContent>
 
     <!-- Bottom Navbar -->
-<!-- Bottom Navbar -->
     <div class="field-bottom-nav @(_bottomNavHidden ? "field-bottom-nav-hidden" : "")">
         <div class="field-bottom-nav-inner">
             <a href="/field" class="field-bottom-tab @(IsActive("/field") ? "active" : "")">
@@ -151,21 +209,176 @@
     private bool _bottomNavHidden;
     private bool _notificationsOpen;
     private bool _profileMenuOpen;
+    private bool _notificationsLoading;
+    private bool _loadingMore;
+    private bool _hasMoreNotifications;
     private int _unreadCount = 0;
+    private List<NotificationDto> _notifications = new();
+    private int _currentPage = 1;
+    private const int PageSize = 15;
+    private bool _initialLoadDone;
     private UserInfo _userInfo = new();
 
     protected override async Task OnInitializedAsync()
     {
         _userInfo = await CurrentUser.GetCurrentUserAsync() ?? new();
+
+        await LoadUnreadCount();
+        await ConnectNotificationSignalR();
+    }
+
+    private async Task ConnectNotificationSignalR()
+    {
+        try
+        {
+            NotificationSignalR.OnNotificationReceived += HandleIncomingNotification;
+            await NotificationSignalR.ConnectAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Notification SignalR setup failed: {ex.Message}");
+        }
+    }
+
+    private async Task HandleIncomingNotification(NotificationDto notification)
+    {
+        await InvokeAsync(() =>
+        {
+            _notifications.Insert(0, notification);
+            if (!notification.IsRead)
+                _unreadCount++;
+
+            StateHasChanged();
+
+            Snackbar.Add(notification.Title, Severity.Info, config =>
+            {
+                config.Icon = Icons.Material.Outlined.Notifications;
+                config.IconColor = Color.Primary;
+            });
+        });
+    }
+
+    private async Task LoadUnreadCount()
+    {
+        var result = await NotificationService.GetUnreadCountAsync();
+        if (result.Success && result.Data is not null)
+            _unreadCount = result.Data.Count;
+    }
+
+    private async Task LoadNotifications()
+    {
+        if (_initialLoadDone) return;
+
+        _notificationsLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            _currentPage = 1;
+            var result = await NotificationService.GetNotificationsAsync(false, _currentPage, PageSize);
+            if (result.Success && result.Data is not null)
+            {
+                _notifications = result.Data.Items?.ToList() ?? new();
+                _hasMoreNotifications = result.Data.HasNextPage;
+            }
+            _initialLoadDone = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load notifications: {ex.Message}");
+        }
+        finally
+        {
+            _notificationsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadMoreNotifications()
+    {
+        if (_loadingMore) return;
+
+        _loadingMore = true;
+        StateHasChanged();
+
+        try
+        {
+            _currentPage++;
+            var result = await NotificationService.GetNotificationsAsync(false, _currentPage, PageSize);
+            if (result.Success && result.Data is not null)
+            {
+                _notifications.AddRange(result.Data.Items ?? Enumerable.Empty<NotificationDto>());
+                _hasMoreNotifications = result.Data.HasNextPage;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load more notifications: {ex.Message}");
+            _currentPage--;
+        }
+        finally
+        {
+            _loadingMore = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task MarkAsRead(NotificationDto notification)
+    {
+        var result = await NotificationService.MarkAsReadAsync(notification.Id);
+        if (result.Success)
+        {
+            notification.IsRead = true;
+            notification.ReadAt = DateTime.UtcNow;
+            _unreadCount = Math.Max(0, _unreadCount - 1);
+            StateHasChanged();
+        }
+    }
+
+    private async Task MarkAllRead()
+    {
+        var result = await NotificationService.MarkAllAsReadAsync();
+        if (result.Success)
+        {
+            foreach (var n in _notifications)
+            {
+                n.IsRead = true;
+                n.ReadAt = DateTime.UtcNow;
+            }
+            _unreadCount = 0;
+            StateHasChanged();
+            Snackbar.Add("All notifications marked as read", Severity.Success);
+        }
+    }
+
+    private async Task DeleteNotification(NotificationDto notification)
+    {
+        var result = await NotificationService.DeleteNotificationAsync(notification.Id);
+        if (result.Success)
+        {
+            if (!notification.IsRead)
+                _unreadCount = Math.Max(0, _unreadCount - 1);
+            _notifications.Remove(notification);
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleNotificationClick(NotificationDto notification)
+    {
+        if (!notification.IsRead)
+            await MarkAsRead(notification);
     }
 
     private void ToggleTopNav()    => _topNavHidden    = !_topNavHidden;
     private void ToggleBottomNav() => _bottomNavHidden = !_bottomNavHidden;
 
-    private void ToggleNotifications()
+    private async Task ToggleNotifications()
     {
-        _profileMenuOpen  = false;
+        _profileMenuOpen = false;
         _notificationsOpen = !_notificationsOpen;
+
+        if (_notificationsOpen && !_initialLoadDone)
+            await LoadNotifications();
     }
 
     private void ToggleProfileMenu()
@@ -203,17 +416,6 @@
         else
             Navigation.NavigateTo("/field?action=join");
     }
-    private void CloseJoinMenu()
-    {
-        _notificationsOpen = false;
-        _profileMenuOpen   = false;
-    }
-
-    private void MarkAllRead()
-    {
-        _unreadCount = 0;
-        Snackbar.Add("All notifications marked as read", Severity.Success);
-    }
 
     private async Task HandleLogout()
     {
@@ -222,10 +424,39 @@
         Snackbar.Add("Logged out successfully", Severity.Success);
         Navigation.NavigateTo("/", forceLoad: true);
     }
+
     private bool IsActive(string path)
     {
         var baseUri = Navigation.BaseUri.TrimEnd('/');
         return Navigation.Uri.StartsWith(
             baseUri + path, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetNotificationIcon(string typeName) => typeName switch
+    {
+        "TaskAssigned" => Icons.Material.Outlined.PersonAdd,
+        "TaskStatusChanged" => Icons.Material.Outlined.SyncAlt,
+        "TaskCommentAdded" => Icons.Material.Outlined.ChatBubbleOutline,
+        "TaskPriorityChanged" => Icons.Material.Outlined.Flag,
+        "TaskUpdated" => Icons.Material.Outlined.Edit,
+        "GroupInvitation" => Icons.Material.Outlined.GroupAdd,
+        "TaskDueSoon" => Icons.Material.Outlined.Schedule,
+        "TaskOverdue" => Icons.Material.Outlined.Warning,
+        _ => Icons.Material.Outlined.Notifications
+    };
+
+    private static string FormatTimeAgo(DateTime createdAt)
+    {
+        var diff = DateTime.UtcNow - createdAt;
+        if (diff.TotalMinutes < 1) return "just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
+        return createdAt.ToString("MMM d");
+    }
+
+    public void Dispose()
+    {
+        NotificationSignalR.OnNotificationReceived -= HandleIncomingNotification;
     }
 }

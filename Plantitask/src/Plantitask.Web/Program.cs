@@ -60,8 +60,11 @@ builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IKanbanSignalRService, KanbanSignalRService>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
-builder.Services.AddScoped<INotificationWebService, NotificationWebService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IUserProfileService, UserProfileService>();
+builder.Services.AddScoped<INotificationPreferenceService, NotificationPreferenceService>();
 builder.Services.AddScoped<INotificationSignalRService, NotificationSignalRService>();
 builder.Services.AddScoped<KanbanLayoutState>();
+builder.Services.AddScoped<ISettingsUIService, SettingsUIService>();
 
 await builder.Build().RunAsync();

@@ -140,6 +140,7 @@ builder.Services.Configure<FileStorageSettings>(
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 builder.Services.AddScoped<IGroupCodeGenerator, GroupCodeGenerator>();
+builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 
 // HttpContext for accessing request information
 builder.Services.AddHttpContextAccessor();
