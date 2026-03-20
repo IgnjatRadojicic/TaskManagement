@@ -195,6 +195,7 @@ namespace Plantitask.Infrastructure.Services
                     UserId = gm.UserId,
                     UserName = gm.User.UserName,
                     Email = gm.User.Email,
+                    ProfilePictureUrl = gm.User.ProfilePictureUrl,
                     Role = (GroupRole)gm.RoleId,
                     JoinedAt = gm.JoinedAt
                 }).ToListAsync();
@@ -288,6 +289,7 @@ namespace Plantitask.Infrastructure.Services
                 UserId = targetMembership.UserId,
                 UserName = targetMembership.User.UserName,
                 Email = targetMembership.User.Email,
+                ProfilePictureUrl = targetMembership.User.ProfilePictureUrl,
                 Role = changeRoleDto.NewRole,
                 JoinedAt = targetMembership.JoinedAt
             };

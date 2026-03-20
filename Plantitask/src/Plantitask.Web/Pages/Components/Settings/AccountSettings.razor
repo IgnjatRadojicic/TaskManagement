@@ -1,6 +1,7 @@
 @inject IUserProfileService ProfileService
 @inject ISettingsUIService SettingsUI
 @inject ISnackbar Snackbar
+@inject ICurrentUserService CurrentUser
 @inject IJSRuntime JS
 @implements IDisposable
 
@@ -228,6 +229,7 @@ else
             _profile.ProfilePictureUrl = null;
             Snackbar.Add("Profile picture removed", Severity.Success);
             StateHasChanged();
+            CurrentUser.ClearCache();
         }
     }
 
