@@ -46,6 +46,7 @@
             }
             @if (Task.AssignedToId.HasValue)
             {
+                <div class="kanban-card-assignee" title="@Task.AssignedToUserName">
                     @if (!string.IsNullOrEmpty(Task.AssignedToProfilePictureUrl))
                     {
                         <img src="@Task.AssignedToProfilePictureUrl" alt="@Task.AssignedToUserName"
@@ -55,6 +56,7 @@
                     {
                         <span>@GetInitials(Task.AssignedToUserName)</span>
                     }
+                </div>
             }
         </div>
     </div>

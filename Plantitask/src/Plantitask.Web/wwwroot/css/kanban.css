@@ -569,6 +569,7 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    overflow: hidden;
 }
 
 .kanban-card-assignee span {
