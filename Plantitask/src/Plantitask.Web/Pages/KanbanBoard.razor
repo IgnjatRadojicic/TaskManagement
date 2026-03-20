@@ -129,10 +129,14 @@
     {
         if (!firstRender) return;
 
+
+
         _userInfo = await CurrentUser.GetCurrentUserAsync() ?? new();
     
           _selfRef?.Dispose();
          _selfRef = DotNetObjectReference.Create(this);
+
+
 
           await LoadBoard();
           await KanbanSignalR.ConnectAsync(GroupId);

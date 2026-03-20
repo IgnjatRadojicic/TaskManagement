@@ -88,6 +88,7 @@ public class CommentService : ICommentService
                 TaskId = tc.TaskId,
                 Content = tc.Content,
                 UserId = tc.UserId,
+                ProfilePictureUrl = tc.User.ProfilePictureUrl,
                 UserName = tc.User.UserName,
                 CreatedAt = tc.CreatedAt,
                 UpdatedAt = tc.UpdatedAt
@@ -174,6 +175,7 @@ public class CommentService : ICommentService
             Id = comment.Id,
             TaskId = comment.TaskId,
             Content = comment.Content,
+            ProfilePictureUrl = comment.User.ProfilePictureUrl,
             UserId = comment.UserId,
             UserName = comment.User.UserName,
             CreatedAt = comment.CreatedAt,

@@ -25,6 +25,8 @@ namespace Plantitask.Web.Models
         public string Content { get; set; } = string.Empty;
         public Guid UserId { get; set; }
         public string UserName { get; set; } = string.Empty;
+
+        public string? ProfilePictureUrl { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public bool IsEdited => UpdatedAt.HasValue;

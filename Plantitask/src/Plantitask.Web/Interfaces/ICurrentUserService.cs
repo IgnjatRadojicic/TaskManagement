@@ -5,5 +5,6 @@ namespace Plantitask.Web.Interfaces
     public interface ICurrentUserService
     {
         Task<UserInfo?> GetCurrentUserAsync();
+        void ClearCache();
     }
 }

@@ -420,6 +420,7 @@
     private async Task HandleLogout()
     {
         CloseAllPanels();
+        CurrentUser.ClearCache();
         await AuthService.LogoutAsync();
         Snackbar.Add("Logged out successfully", Severity.Success);
         Navigation.NavigateTo("/", forceLoad: true);
