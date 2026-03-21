@@ -173,13 +173,16 @@ builder.Services.AddHangfire(configuration => configuration
     .UsePostgreSqlStorage(options =>
     {
         options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("HangfireConnection"));
+    }, new PostgreSqlStorageOptions
+    {
+        QueuePollInterval = TimeSpan.FromSeconds(30)
     }));
 
 builder.Services.AddHangfireServer(options =>
 {
-    options.WorkerCount = 5;  // 5 parallel background workers
+    options.WorkerCount = 2;
+    options.SchedulePollingInterval = TimeSpan.FromMinutes(1);
 });
-
 
 // Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
