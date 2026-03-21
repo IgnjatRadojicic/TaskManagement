@@ -462,8 +462,6 @@
 
     private async Task HandleRegister()
     {
-        // Frontend guard — should not happen since button is disabled,
-        // but protects against edge cases
         if (!PasswordMeetsAllRequirements)
         {
             Snackbar.Add("Password does not meet all requirements", Severity.Warning);
@@ -484,13 +482,6 @@
             Snackbar.Add(result.Error, Severity.Error);
         }
     }
-
-    private async Task HandleGoogleLogin()
-    {
-        await Task.CompletedTask;
-        Snackbar.Add("Google login coming soon", Severity.Info);
-    }
-
     private void OnPasswordChanged(string password)
     {
         _registerModel.Password = password;
