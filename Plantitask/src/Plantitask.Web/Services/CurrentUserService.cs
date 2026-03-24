@@ -25,10 +25,12 @@ public class CurrentUserService : ICurrentUserService
 
         var state = await _authStateProvider.GetAuthenticationStateAsync();
         var user = state.User;
+
         if (user.Identity?.IsAuthenticated != true)
             return null;
 
         var c = user.Claims;
+
         var info = new UserInfo
         {
             Id = Guid.TryParse(
@@ -50,9 +52,17 @@ public class CurrentUserService : ICurrentUserService
         {
             var result = await _profileService.GetProfileAsync();
             if (result.Success && result.Data is not null)
+            {
                 info.ProfilePictureUrl = result.Data.ProfilePictureUrl;
+                info.IsPremium = result.Data.IsPremium;
+                info.SubscriptionType = result.Data.SubscriptionType;
+                info.PremiumExpiresAt = result.Data.PremiumExpiresAt;
+            }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CurrentUserService] GetProfileAsync failed: {ex.Message}");
+        }
 
         _cached = info;
         return _cached;
