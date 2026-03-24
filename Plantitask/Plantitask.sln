@@ -14,6 +14,9 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Plantitask.Web", "src\Plantitask.Web\Plantitask.Web.csproj", "{ED9C88A1-BCC7-4B32-8C29-9B3ECCBA80FD}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{5B580773-D98E-41D9-819E-FD9C82767F53}"
+	ProjectSection(SolutionItems) = preProject
+		src\Plantitask.Web\Program.cs = src\Plantitask.Web\Program.cs
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Plantitask.Tests", "tests\Plantitask.Tests\Plantitask.Tests.csproj", "{C29C4602-9E68-4174-86EB-CCEE4B1F7856}"
 EndProject

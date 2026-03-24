@@ -1,24 +1,25 @@
+using Hangfire;
+using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using StackExchange.Redis;
-using System.Text;
+using Plantitask.Api.Filters;
 using Plantitask.Api.Hubs;
 using Plantitask.Api.Interfaces;
+using Plantitask.Api.Middleware;
 using Plantitask.Api.Services;
 using Plantitask.Core.Common;
 using Plantitask.Core.Configuration;
+using Plantitask.Core.DTO.Paypal;
 using Plantitask.Core.Interfaces;
 using Plantitask.Infrastructure.Data;
 using Plantitask.Infrastructure.Services;
-using Hangfire;
-using Hangfire.PostgreSql;
 using Plantitask.Infrastructure.Services.Storage;
-using Plantitask.Api.Filters;
-using Plantitask.Api.Middleware;
+using StackExchange.Redis;
+using System.Text;
 using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -138,11 +139,15 @@ builder.Services.AddScoped<NotificationBackgroundJob>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.Configure<FileStorageSettings>(
     builder.Configuration.GetSection("FileStorage"));
-// Infrastructure Services
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 builder.Services.AddScoped<IGroupCodeGenerator, GroupCodeGenerator>();
 builder.Services.AddScoped<IUserProfileService, UserProfileService>();
+
+// PayPal
+builder.Services.Configure<PayPalSettings>(
+    builder.Configuration.GetSection("PayPal"));
+builder.Services.AddHttpClient<IPayPalService, PayPalService>();
 
 // HttpContext for accessing request information
 builder.Services.AddHttpContextAccessor();
