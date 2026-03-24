@@ -1,7 +1,4 @@
-﻿/* ===== DARK MODE FIXES ===== */
-/* Targeted overrides for elements that break with variable swapping */
-
-/* ---- Landing: hero always needs white text (it's on a photo) ---- */
+﻿
 [data-theme="dark"] .landing-hero .landing-headline,
 [data-theme="dark"] .landing-hero .landing-subtext,
 [data-theme="dark"] .landing-hero .landing-cta,
