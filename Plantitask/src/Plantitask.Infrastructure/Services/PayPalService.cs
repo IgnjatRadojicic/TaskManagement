@@ -1,0 +1,490 @@
+﻿using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Plantitask.Core.Common;
+using Plantitask.Core.DTO.Paypal;
+using Plantitask.Core.Entities;
+using Plantitask.Core.Interfaces;
+
+namespace Plantitask.Infrastructure.Services
+{
+    public class PayPalService : IPayPalService
+    {
+        private readonly IApplicationDbContext _db;
+        private readonly HttpClient _http;
+        private readonly IOptions<PayPalSettings> _settings;
+        private readonly ILogger<PayPalService> _logger;
+
+        private static readonly JsonSerializerOptions _jsonOpts = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
+
+        public PayPalService(
+            IApplicationDbContext db,
+            HttpClient http,
+            IOptions<PayPalSettings> settings,
+            ILogger<PayPalService> logger)
+        {
+            _db = db;
+            _http = http;
+            _settings = settings;
+            _logger = logger;
+        }
+
+        private async Task<string> GetAccessTokenAsync()
+        {
+            var credentials = Convert.ToBase64String(
+                Encoding.UTF8.GetBytes($"{_settings.Value.ClientId}:{_settings.Value.ClientSecret}"));
+
+            var request = new HttpRequestMessage(HttpMethod.Post,
+                $"{_settings.Value.BaseUrl}/v1/oauth2/token");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+            request.Content = new FormUrlEncodedContent(new[]
+            {
+                new KeyValuePair<string, string>("grant_type", "client_credentials")
+            });
+
+            var response = await _http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.GetProperty("access_token").GetString()!;
+        }
+
+        public async Task<Result<CreateSubscriptionResponse>> CreateSubscriptionAsync(
+            Guid userId, CreateSubscriptionRequest request)
+        {
+            var token = await GetAccessTokenAsync();
+
+            var body = new
+            {
+                plan_id = _settings.Value.RecurringPlanId,
+                custom_id = userId.ToString(),
+                application_context = new
+                {
+                    brand_name = "Plantitask",
+                    return_url = request.ReturnUrl,
+                    cancel_url = request.CancelUrl,
+                    user_action = "SUBSCRIBE_NOW",
+                    shipping_preference = "NO_SHIPPING"
+                }
+            };
+
+            var httpReq = new HttpRequestMessage(HttpMethod.Post,
+                $"{_settings.Value.BaseUrl}/v1/billing/subscriptions");
+            httpReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            httpReq.Content = new StringContent(
+                JsonSerializer.Serialize(body, _jsonOpts), Encoding.UTF8, "application/json");
+
+            var httpResp = await _http.SendAsync(httpReq);
+            var respJson = await httpResp.Content.ReadAsStringAsync();
+
+            if (!httpResp.IsSuccessStatusCode)
+            {
+                _logger.LogError("PayPal create subscription failed: {Response}", respJson);
+                return Error.BadRequest("Failed to create PayPal subscription");
+            }
+
+            using var doc = JsonDocument.Parse(respJson);
+            var root = doc.RootElement;
+
+            var subscriptionId = root.GetProperty("id").GetString()!;
+            var approvalUrl = root.GetProperty("links")
+                .EnumerateArray()
+                .First(l => l.GetProperty("rel").GetString() == "approve")
+                .GetProperty("href").GetString()!;
+
+            return new CreateSubscriptionResponse
+            {
+                SubscriptionId = subscriptionId,
+                ApprovalUrl = approvalUrl
+            };
+        }
+
+        public async Task<Result> ActivateSubscriptionAsync(Guid userId, string subscriptionId)
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user is null)
+                return Error.NotFound("User not found");
+
+            if (user.IsPremium && user.PayPalSubscriptionId == subscriptionId)
+                return Result.Success();
+
+            var token = await GetAccessTokenAsync();
+            var httpReq = new HttpRequestMessage(HttpMethod.Get,
+                $"{_settings.Value.BaseUrl}/v1/billing/subscriptions/{subscriptionId}");
+            httpReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var httpResp = await _http.SendAsync(httpReq);
+            if (!httpResp.IsSuccessStatusCode)
+                return Error.BadRequest("Failed to verify subscription with PayPal");
+
+            var json = await httpResp.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var status = doc.RootElement.GetProperty("status").GetString();
+
+            if (status != "ACTIVE")
+                return Error.BadRequest("Subscription is not active on PayPal");
+
+            user.IsPremium = true;
+            user.PayPalSubscriptionId = subscriptionId;
+            user.SubscriptionType = "recurring";
+            user.PremiumStartedAt = DateTime.UtcNow;
+            user.PremiumExpiresAt = null;
+            user.MaxGroups = 10;
+
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("User {UserId} activated recurring premium via subscription {SubId}",
+                userId, subscriptionId);
+
+            return Result.Success();
+        }
+
+        public async Task<Result> CancelSubscriptionAsync(Guid userId)
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user is null)
+                return Error.NotFound("User not found");
+
+            if (!user.IsPremium)
+                return Error.BadRequest("User does not have an active premium subscription");
+
+            if (user.SubscriptionType == "recurring" && !string.IsNullOrEmpty(user.PayPalSubscriptionId))
+            {
+                var token = await GetAccessTokenAsync();
+                var httpReq = new HttpRequestMessage(HttpMethod.Post,
+                    $"{_settings.Value.BaseUrl}/v1/billing/subscriptions/{user.PayPalSubscriptionId}/cancel");
+                httpReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                httpReq.Content = new StringContent(
+                    JsonSerializer.Serialize(new { reason = "User requested cancellation" }, _jsonOpts),
+                    Encoding.UTF8, "application/json");
+
+                var httpResp = await _http.SendAsync(httpReq);
+                if (!httpResp.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("PayPal cancel subscription failed for user {UserId}", userId);
+                }
+            }
+
+            RevokePremium(user);
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("User {UserId} cancelled premium", userId);
+            return Result.Success();
+        }
+
+        public async Task<Result<CreateOrderResponse>> CreateOneTimeOrderAsync(
+            Guid userId, CreateOrderRequest request)
+        {
+            var token = await GetAccessTokenAsync();
+
+            var body = new
+            {
+                intent = "CAPTURE",
+                purchase_units = new[]
+                {
+                    new
+                    {
+                        custom_id = userId.ToString(),
+                        description = "Plantitask Premium - 30 Days",
+                        amount = new
+                        {
+                            currency_code = _settings.Value.Currency,
+                            value = _settings.Value.OneTimePrice.ToString("F2")
+                        }
+                    }
+                },
+                application_context = new
+                {
+                    brand_name = "Plantitask",
+                    return_url = request.ReturnUrl,
+                    cancel_url = request.CancelUrl,
+                    shipping_preference = "NO_SHIPPING"
+                }
+            };
+
+            var httpReq = new HttpRequestMessage(HttpMethod.Post,
+                $"{_settings.Value.BaseUrl}/v2/checkout/orders");
+            httpReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            httpReq.Content = new StringContent(
+                JsonSerializer.Serialize(body, _jsonOpts), Encoding.UTF8, "application/json");
+
+            var httpResp = await _http.SendAsync(httpReq);
+            var respJson = await httpResp.Content.ReadAsStringAsync();
+
+            if (!httpResp.IsSuccessStatusCode)
+            {
+                _logger.LogError("PayPal create order failed: {Response}", respJson);
+                return Error.BadRequest("Failed to create PayPal order");
+            }
+
+            using var doc = JsonDocument.Parse(respJson);
+            var root = doc.RootElement;
+
+            var orderId = root.GetProperty("id").GetString()!;
+            var approvalUrl = root.GetProperty("links")
+                .EnumerateArray()
+                .First(l => l.GetProperty("rel").GetString() == "approve")
+                .GetProperty("href").GetString()!;
+
+            return new CreateOrderResponse
+            {
+                OrderId = orderId,
+                ApprovalUrl = approvalUrl
+            };
+        }
+
+        public async Task<Result<CaptureOrderResponse>> CaptureOrderAsync(Guid userId, string orderId)
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user is null)
+                return Error.NotFound("User not found");
+
+            if (user.IsPremium && user.PayPalOrderId == orderId)
+            {
+                return new CaptureOrderResponse
+                {
+                    Success = true,
+                    OrderId = orderId,
+                    Status = "COMPLETED"
+                };
+            }
+
+            var token = await GetAccessTokenAsync();
+
+            var httpReq = new HttpRequestMessage(HttpMethod.Post,
+                $"{_settings.Value.BaseUrl}/v2/checkout/orders/{orderId}/capture");
+            httpReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            httpReq.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+
+            var httpResp = await _http.SendAsync(httpReq);
+            var respJson = await httpResp.Content.ReadAsStringAsync();
+
+            if (!httpResp.IsSuccessStatusCode)
+            {
+                _logger.LogError("PayPal capture order failed: {Response}", respJson);
+                return Error.BadRequest("Failed to capture PayPal order");
+            }
+
+            using var doc = JsonDocument.Parse(respJson);
+            var status = doc.RootElement.GetProperty("status").GetString()!;
+
+            if (status != "COMPLETED")
+            {
+                return new CaptureOrderResponse
+                {
+                    Success = false,
+                    OrderId = orderId,
+                    Status = status
+                };
+            }
+
+            user.IsPremium = true;
+            user.PayPalOrderId = orderId;
+            user.SubscriptionType = "onetime";
+            user.PremiumStartedAt = DateTime.UtcNow;
+            user.PremiumExpiresAt = DateTime.UtcNow.AddDays(30);
+            user.MaxGroups = 10;
+
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("User {UserId} activated one-time premium via order {OrderId}",
+                userId, orderId);
+
+            return new CaptureOrderResponse
+            {
+                Success = true,
+                OrderId = orderId,
+                Status = status
+            };
+        }
+
+        public async Task<Result<PremiumStatusDto>> GetPremiumStatusAsync(Guid userId)
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user is null)
+                return Error.NotFound("User not found");
+
+            if (user.IsPremium
+                && user.SubscriptionType == "onetime"
+                && user.PremiumExpiresAt.HasValue
+                && user.PremiumExpiresAt.Value <= DateTime.UtcNow)
+            {
+                RevokePremium(user);
+                await _db.SaveChangesAsync();
+
+                return new PremiumStatusDto { IsPremium = false, MaxGroups = 5 };
+            }
+
+            return new PremiumStatusDto
+            {
+                IsPremium = user.HasActivePremium,
+                SubscriptionType = user.SubscriptionType,
+                ExpiresAt = user.PremiumExpiresAt,
+                StartedAt = user.PremiumStartedAt,
+                CanUseDarkMode = user.HasActivePremium,
+                MaxGroups = user.HasActivePremium ? 10 : 5
+            };
+        }
+
+        public async Task HandleWebhookAsync(string body, Dictionary<string, string> headers)
+        {
+            if (!await VerifyWebhookSignatureAsync(body, headers))
+            {
+                _logger.LogWarning("PayPal webhook signature verification failed");
+                return;
+            }
+
+            var webhookEvent = JsonSerializer.Deserialize<PayPalWebhookEvent>(body, _jsonOpts);
+            if (webhookEvent is null) return;
+
+            _logger.LogInformation("PayPal webhook: {EventType} for resource {ResourceId}",
+                webhookEvent.EventType, webhookEvent.Resource.Id);
+
+            switch (webhookEvent.EventType)
+            {
+                case "BILLING.SUBSCRIPTION.ACTIVATED":
+                    await HandleSubscriptionActivated(webhookEvent);
+                    break;
+
+                case "PAYMENT.SALE.COMPLETED":
+                    await HandlePaymentCompleted(webhookEvent);
+                    break;
+
+                case "BILLING.SUBSCRIPTION.CANCELLED":
+                case "BILLING.SUBSCRIPTION.SUSPENDED":
+                case "BILLING.SUBSCRIPTION.EXPIRED":
+                    await HandleSubscriptionCancelled(webhookEvent);
+                    break;
+
+                case "BILLING.SUBSCRIPTION.PAYMENT.FAILED":
+                    await HandlePaymentFailed(webhookEvent);
+                    break;
+            }
+        }
+
+        private async Task HandleSubscriptionActivated(PayPalWebhookEvent evt)
+        {
+            var customId = evt.Resource.CustomId;
+            if (string.IsNullOrEmpty(customId) || !Guid.TryParse(customId, out var userId)) return;
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user is null) return;
+
+            user.IsPremium = true;
+            user.PayPalSubscriptionId = evt.Resource.Id;
+            user.SubscriptionType = "recurring";
+            user.PremiumStartedAt ??= DateTime.UtcNow;
+            user.PremiumExpiresAt = null;
+            user.MaxGroups = 10;
+
+            await _db.SaveChangesAsync();
+        }
+
+        private async Task HandlePaymentCompleted(PayPalWebhookEvent evt)
+        {
+            var billingAgreementId = evt.Resource.BillingAgreementId;
+            if (string.IsNullOrEmpty(billingAgreementId)) return;
+
+            var user = await _db.Users.FirstOrDefaultAsync(
+                u => u.PayPalSubscriptionId == billingAgreementId);
+            if (user is null) return;
+
+            user.IsPremium = true;
+            user.PremiumStartedAt ??= DateTime.UtcNow;
+            user.PremiumExpiresAt = null;
+            user.MaxGroups = 10;
+
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Recurring payment completed for user {UserId}, agreement {AgreementId}",
+                user.Id, billingAgreementId);
+        }
+
+        private async Task HandleSubscriptionCancelled(PayPalWebhookEvent evt)
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(
+                u => u.PayPalSubscriptionId == evt.Resource.Id);
+            if (user is null) return;
+
+            RevokePremium(user);
+            await _db.SaveChangesAsync();
+        }
+
+        private async Task HandlePaymentFailed(PayPalWebhookEvent evt)
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(
+                u => u.PayPalSubscriptionId == evt.Resource.Id);
+            if (user is null) return;
+
+            _logger.LogWarning("Payment failed for user {UserId}, subscription {SubId}",
+                user.Id, evt.Resource.Id);
+
+            RevokePremium(user);
+            await _db.SaveChangesAsync();
+        }
+
+        private async Task<bool> VerifyWebhookSignatureAsync(string body, Dictionary<string, string> headers)
+        {
+            try
+            {
+                var token = await GetAccessTokenAsync();
+
+                headers.TryGetValue("PAYPAL-AUTH-ALGO", out var authAlgo);
+                headers.TryGetValue("PAYPAL-CERT-URL", out var certUrl);
+                headers.TryGetValue("PAYPAL-TRANSMISSION-ID", out var transmissionId);
+                headers.TryGetValue("PAYPAL-TRANSMISSION-SIG", out var transmissionSig);
+                headers.TryGetValue("PAYPAL-TRANSMISSION-TIME", out var transmissionTime);
+
+                var verifyBody = new
+                {
+                    auth_algo = authAlgo ?? "",
+                    cert_url = certUrl ?? "",
+                    transmission_id = transmissionId ?? "",
+                    transmission_sig = transmissionSig ?? "",
+                    transmission_time = transmissionTime ?? "",
+                    webhook_id = _settings.Value.WebhookId,
+                    webhook_event = JsonSerializer.Deserialize<JsonElement>(body)
+                };
+
+                var httpReq = new HttpRequestMessage(HttpMethod.Post,
+                    $"{_settings.Value.BaseUrl}/v1/notifications/verify-webhook-signature");
+                httpReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                httpReq.Content = new StringContent(
+                    JsonSerializer.Serialize(verifyBody, _jsonOpts),
+                    Encoding.UTF8, "application/json");
+
+                var httpResp = await _http.SendAsync(httpReq);
+                var json = await httpResp.Content.ReadAsStringAsync();
+
+                using var doc = JsonDocument.Parse(json);
+                var status = doc.RootElement.GetProperty("verification_status").GetString();
+                return status == "SUCCESS";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Webhook verification error");
+                return false;
+            }
+        }
+
+        private static void RevokePremium(User user)
+        {
+            user.IsPremium = false;
+            user.PremiumStartedAt = null;
+            user.PremiumExpiresAt = null;
+            user.PayPalSubscriptionId = null;
+            user.PayPalOrderId = null;
+            user.SubscriptionType = null;
+            user.MaxGroups = 5;
+        }
+    }
+}

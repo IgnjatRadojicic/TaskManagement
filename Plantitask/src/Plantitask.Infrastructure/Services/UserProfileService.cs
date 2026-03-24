@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using Plantitask.Core.Common;
 using Plantitask.Core.DTO.Users;
+using Plantitask.Core.Entities;
 using Plantitask.Core.Interfaces;
 using Plantitask.Infrastructure.Data;
 
@@ -13,6 +14,8 @@ public class UserProfileService : IUserProfileService
     private readonly IFileStorageService _fileStorage;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ILogger<UserProfileService> _logger;
+
+    private const long MaxProfilePictureBytes = 5 * 1024 * 1024;
 
     public UserProfileService(
         ApplicationDbContext context,
@@ -28,25 +31,12 @@ public class UserProfileService : IUserProfileService
 
     public async Task<Result<UserProfileDto>> GetProfileAsync(Guid userId)
     {
-        var user = await _context.Users
-            .Where(u => u.Id == userId)
-            .Select(u => new UserProfileDto
-            {
-                Id = u.Id,
-                UserName = u.UserName,
-                Email = u.Email,
-                FirstName = u.FirstName,
-                LastName = u.LastName,
-                ProfilePictureUrl = u.ProfilePictureUrl,
-                LastLoginAt = u.LastLoginAt,
-                CreatedAt = u.CreatedAt
-            })
-            .FirstOrDefaultAsync();
+        var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
 
         if (user is null)
             return Error.NotFound("User not found");
 
-        return user;
+        return MapToDto(user);
     }
 
     public async Task<Result<UserProfileDto>> UpdateProfileAsync(Guid userId, UpdateUserProfileDto dto)
@@ -77,17 +67,7 @@ public class UserProfileService : IUserProfileService
 
         _logger.LogInformation("User {UserId} updated their profile", userId);
 
-        return new UserProfileDto
-        {
-            Id = user.Id,
-            UserName = user.UserName,
-            Email = user.Email,
-            FirstName = user.FirstName,
-            LastName = user.LastName,
-            ProfilePictureUrl = user.ProfilePictureUrl,
-            LastLoginAt = user.LastLoginAt,
-            CreatedAt = user.CreatedAt
-        };
+        return MapToDto(user);
     }
 
     public async Task<Result<string>> UploadProfilePictureAsync(
@@ -104,13 +84,12 @@ public class UserProfileService : IUserProfileService
         if (!string.IsNullOrEmpty(user.ProfilePictureUrl))
         {
             try { await _fileStorage.DeleteFileAsync(user.ProfilePictureUrl); }
-            catch { /* old file cleanup is best-effort */ }
+            catch { }
         }
 
         var path = $"profile-pictures/{userId}/{Guid.NewGuid()}{Path.GetExtension(fileName)}";
         var storagePath = await _fileStorage.UploadFileAsync(fileStream, path, contentType);
         user.ProfilePictureUrl = _fileStorage.GetFileUrl(storagePath);
-
 
         await _context.SaveChangesAsync();
 
@@ -128,7 +107,7 @@ public class UserProfileService : IUserProfileService
         if (!string.IsNullOrEmpty(user.ProfilePictureUrl))
         {
             try { await _fileStorage.DeleteFileAsync(user.ProfilePictureUrl); }
-            catch { /* best-effort */ }
+            catch { }
         }
 
         user.ProfilePictureUrl = null;
@@ -162,5 +141,25 @@ public class UserProfileService : IUserProfileService
         _logger.LogInformation("User {UserId} changed their password", userId);
 
         return Result.Success();
+    }
+
+    private static UserProfileDto MapToDto(User user)
+    {
+        return new UserProfileDto
+        {
+            Id = user.Id,
+            UserName = user.UserName,
+            Email = user.Email,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            ProfilePictureUrl = user.ProfilePictureUrl,
+            LastLoginAt = user.LastLoginAt,
+            CreatedAt = user.CreatedAt,
+            IsPremium = user.HasActivePremium,
+            SubscriptionType = user.SubscriptionType,
+            PremiumExpiresAt = user.PremiumExpiresAt,
+            PremiumStartedAt = user.PremiumStartedAt,
+            MaxGroups = user.MaxGroups
+        };
     }
 }
